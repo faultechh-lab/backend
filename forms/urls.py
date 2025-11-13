@@ -1,0 +1,12 @@
+from django.urls import path
+from .views import FormListView, FormCreateView, FormVerifiedView, FormDeleteView, FormUpdateView, FormMyListView, FormImageCreateView
+
+urlpatterns = [
+    path('forms/', FormListView.as_view(), name='form-list'),
+    path('forms/my/', FormMyListView.as_view(), name='form-my-list'),
+    path('forms/create/', FormCreateView.as_view(), name='form-create'),
+    path('forms/verified/<int:pk>/', FormVerifiedView.as_view(), name='form-verified'),
+    path('forms/delete/<int:pk>/', FormDeleteView.as_view(), name='form-delete'),
+    path('forms/update/<int:pk>/', FormUpdateView.as_view(), name='form-update'),
+    path('forms/<int:pk>/images/', FormImageCreateView.as_view(), name='form-image-create'),
+]
