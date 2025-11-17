@@ -81,12 +81,13 @@ class CheckAuthSerializer(serializers.ModelSerializer):
     membership_type_display = serializers.CharField(source='get_membership_type_display', read_only=True)
     is_expired = serializers.SerializerMethodField()  # 🔹 read_only=True yerine bu daha doğru
     is_premium = serializers.SerializerMethodField()
+    is_company = serializers.SerializerMethodField()
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'avatar','first_name', 'last_name','device_id',
             'is_verified','service_name','membership_status','membership_type','membership_status_display','membership_type_display','membership_created_at',
-            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium',
+            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company',
         )
 
     def get_is_premium(self, obj):
@@ -115,7 +116,10 @@ class CheckAuthSerializer(serializers.ModelSerializer):
 
         # Şimdiki ana eşit veya küçükse süresi dolmuştur
         return expires_at <= now
-   
+    def get_is_company(self, obj):
+        if Company.objects.filter(user=obj).exists():
+            return True
+        return False
 
 class UserProfileSerializer(serializers.ModelSerializer):
     membership_status_display = serializers.CharField(source='get_membership_status_display', read_only=True)

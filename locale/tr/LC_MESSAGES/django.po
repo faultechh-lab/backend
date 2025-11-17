@@ -1532,3 +1532,26 @@ msgstr "Çok fazla istek. Lütfen daha sonra tekrar deneyin."
 
 msgid "This user is already registered for the selected company."
 msgstr "Bu kullanıcı seçilen şirkette zaten kayıtlı."
+
+#
+# orders/models.py (Order & Payment status)
+msgid "Bekliyor"
+msgstr "Bekliyor"
+
+msgid "Tamamlandı"
+msgstr "Tamamlandı"
+
+msgid "İptal Edildi"
+msgstr "İptal Edildi"
+
+msgid "Ödeme"
+msgstr "Ödeme"
+
+msgid "Abone"
+msgstr "Abone"
+
+msgid "Kredi Kartı"
+msgstr "Kredi Kartı"
+
+msgid "EFT&Transfer"
+msgstr "EFT&Transfer"

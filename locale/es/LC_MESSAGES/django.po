@@ -1547,4 +1547,27 @@ msgstr "Demasiadas peticiones. Por favor, inténtelo de nuevo más tarde."
 msgid "This user is already registered for the selected company."
 msgstr "Este usuario ya está registrado para la empresa seleccionada."
 
+#
+# orders/models.py (Order & Payment status)
+msgid "Bekliyor"
+msgstr "Pendiente"
+
+msgid "Tamamlandı"
+msgstr "Completado"
+
+msgid "İptal Edildi"
+msgstr "Cancelado"
+
+msgid "Ödeme"
+msgstr "Pago"
+
+msgid "Abone"
+msgstr "Suscripción"
+
+msgid "Kredi Kartı"
+msgstr "Tarjeta de crédito"
+
+msgid "EFT&Transfer"
+msgstr "EFT y transferencia"
+
 

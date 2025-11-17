@@ -10,7 +10,8 @@ from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parame
 from forms.models import FormImage,Form
 from news.models import News
 from notifications.models import Notification
-from orders.models import Product,OrderNotification
+from orders.models import Product,OrderNotification, OrderStatus
+from accounts.models import MembershipChoices
 from django.utils import timezone
 from datetime import timedelta
 
@@ -65,6 +66,10 @@ class CompanySerializer(serializers.ModelSerializer):
         instance.membership_expires_at = validated_data.get('membership_expires_at', instance.membership_expires_at)
         instance.save()
         return instance
+
+    def validate_status(self, value):
+        # Normalize early so choices validation passes
+        return self._normalize_status(value)
 
 class DefinedDeviceSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
@@ -234,7 +239,50 @@ class OrderNotificationSerializer(serializers.ModelSerializer):
     product_title = serializers.CharField(source='product.title', read_only=True)
     product_price = serializers.DecimalField(source='product.price', read_only=True,max_digits=10, decimal_places=2)
     product_discount_price = serializers.DecimalField(source='product.discount_price', read_only=True,max_digits=10, decimal_places=2)
+    # Override to allow TR labels; will normalize in validate_status
+    status = serializers.CharField(required=False)
 
     class Meta:
         model = OrderNotification
         fields = '__all__'
+
+    def _normalize_status(self, value: str) -> str:
+        if not value:
+            return value
+        # Accept both codes and Turkish labels
+        mapping = {
+            'Bekliyor': OrderStatus.PENDING,
+            'Tamamlandı': OrderStatus.COMPLETED,
+            'İptal Edildi': OrderStatus.CANCELLED,
+        }
+        # Already a valid code
+        if value in OrderStatus.values:
+            return value
+        return mapping.get(str(value), value)
+
+    def update(self, instance, validated_data):
+        # Map incoming TR label to internal code if needed
+        incoming_status = validated_data.get('status', None)
+        if incoming_status is not None:
+            normalized = self._normalize_status(incoming_status)
+            validated_data['status'] = normalized
+
+        prev_status = instance.status
+        instance = super().update(instance, validated_data)
+
+        # If status moved to COMPLETED, grant membership
+        if incoming_status is not None:
+            try:
+                new_status = validated_data.get('status', instance.status)
+                if new_status == OrderStatus.COMPLETED and prev_status != OrderStatus.COMPLETED:
+                    now = timezone.now()
+                    user = instance.user
+                    user.membership_status = MembershipChoices.PREMIUM
+                    user.membership_created_at = now
+                    user.membership_expires_at = now + timedelta(days=365)
+                    user.save(update_fields=['membership_status','membership_created_at','membership_expires_at'])
+            except Exception:
+                # Do not block the update if membership update fails
+                pass
+
+        return instance

@@ -550,7 +550,7 @@ class BoilerCardRepairView(APIView):
                 pass
             refreshed = BoilerCardRepairSerializer(instance, context={'request': request}).data
             return Response(refreshed,status=status.HTTP_201_CREATED)
-        # print(serializer.errors)
+        print(serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def patch(self, request):
@@ -658,6 +658,7 @@ class VideoView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data,status=status.HTTP_201_CREATED)
+        print(serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def patch(self, request):

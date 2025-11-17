@@ -1535,3 +1535,26 @@ msgstr "Слишком много запросов. Пожалуйста, поп
 msgid "This user is already registered for the selected company."
 msgstr "Этот пользователь уже зарегистрирован для выбранной компании."
 
+#
+# orders/models.py (Order & Payment status)
+msgid "Bekliyor"
+msgstr "В ожидании"
+
+msgid "Tamamlandı"
+msgstr "Завершено"
+
+msgid "İptal Edildi"
+msgstr "Отменено"
+
+msgid "Ödeme"
+msgstr "Платеж"
+
+msgid "Abone"
+msgstr "Подписка"
+
+msgid "Kredi Kartı"
+msgstr "Кредитная карта"
+
+msgid "EFT&Transfer"
+msgstr "EFT и перевод"
+

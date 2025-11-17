@@ -1540,3 +1540,26 @@ msgstr "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
 msgid "This user is already registered for the selected company."
 msgstr "Dieser Benutzer ist bereits für die ausgewählte Firma registriert."
 
+#
+# orders/models.py (Order & Payment status)
+msgid "Bekliyor"
+msgstr "Ausstehend"
+
+msgid "Tamamlandı"
+msgstr "Abgeschlossen"
+
+msgid "İptal Edildi"
+msgstr "Storniert"
+
+msgid "Ödeme"
+msgstr "Zahlung"
+
+msgid "Abone"
+msgstr "Abonnement"
+
+msgid "Kredi Kartı"
+msgstr "Kreditkarte"
+
+msgid "EFT&Transfer"
+msgstr "EFT & Überweisung"
+
