@@ -637,6 +637,18 @@ class ExpoPushTokenCreateView(APIView):
             return Response({'detail': _('Expo push token created successfully')}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class ExpoPushTokenDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        try:
+            expo_push_token = ExpoPushToken.objects.get(user=user)
+            serializer = ExpoPushTokenSerializer(expo_push_token)
+            return Response(serializer.data)
+        except ExpoPushToken.DoesNotExist:
+            return Response({'detail': _('Expo push token not found')}, status=status.HTTP_404_NOT_FOUND)
+            
 class ExpoPushTokenUpdate(APIView):
     permission_classes = [permissions.IsAuthenticated]
     

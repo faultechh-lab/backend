@@ -53,7 +53,9 @@ from .serializers import (
 from rest_framework import status
 from django.utils import translation
 from django.db.models import Q
+from .services import clone_model_with_children
 
+from rest_framework.decorators import api_view, permission_classes
 
 class CategoryListView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
@@ -61,6 +63,19 @@ class CategoryListView(APIView):
         categories = Category.objects.filter(active=True)
         serializer = CategorySerializer(categories, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def clone_model_view(request, pk):
+    try:
+        source = Model.objects.get(pk=pk)
+    except Model.DoesNotExist:
+        return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+    name_suffix = request.data.get("name_suffix", " (kopya)")
+    make_inactive = bool(request.data.get("make_inactive", False))
+    new_model = clone_model_with_children(source, name_suffix=name_suffix, make_inactive=make_inactive)
+    return Response({"id": new_model.id, "name": new_model.name}, status=status.HTTP_201_CREATED)
 
 
 class BrandListView(APIView):
@@ -149,6 +164,7 @@ class BoilerPartView(APIView):
 
 #kombi tamiri nasıl yapılır 
 class BoilerRepairGuideView(APIView):
+    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
     def get(self,request):
         lang = request.GET.get("lang")
         translation.activate(lang)

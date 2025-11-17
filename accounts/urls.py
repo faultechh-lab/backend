@@ -6,7 +6,7 @@ from .views import (
     PasswordChangeView, CompanyCreateView,MyCompanyView ,CompanyUpdateView, CompanyListView
     , CompanyDeleteView, UserListView, DefinedDeviceCreateView, 
     DefinedDeviceUpdate,DefinedDeviceListView,DefinedDeviceDetailView,DefinedDeviceDeleteView,
-    ExpoPushTokenCreateView, ExpoPushTokenUpdate, ExpoPushTokenListView,
+    ExpoPushTokenCreateView, ExpoPushTokenUpdate, ExpoPushTokenListView,ExpoPushTokenDetailView,
     AuditLogListView,
 )
 
@@ -40,6 +40,7 @@ urlpatterns = [
     path('expo-push-token-create/', ExpoPushTokenCreateView.as_view(), name='expo-push-token-create'),
     path('expo-push-token-update/', ExpoPushTokenUpdate.as_view(), name='expo-push-token-update'),
     path('expo-push-token-list/', ExpoPushTokenListView.as_view(), name='expo-push-token-list'),
+    path('expo-push-token-detail/', ExpoPushTokenDetailView.as_view(), name='expo-push-token-detail'),
     path('audit-logs/', AuditLogListView.as_view(), name='audit-logs'),
     
 

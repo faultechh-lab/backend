@@ -1,8 +1,8 @@
 from django.urls import path
 from .views import (CategoryListView,BrandListView,ModelListView,FaultCodesListView,ParameterListView,BoilerBoardRepairerView,
 SparePartsDefinitionsView,BoilerWorkingPrincipleView,BoilerCardRepairView,InstrumentUsageView,VideoListView,RoomTermostatView,
-FavoriteBrandView,FavoriteModelView,FavoriteFaultCodeView,BoilerRepairGuideView,BoilerPartView,SearchFaultCodesAPIView
-)
+FavoriteBrandView,FavoriteModelView,FavoriteFaultCodeView,BoilerRepairGuideView,BoilerPartView,SearchFaultCodesAPIView,
+clone_model_view)
 
 
 urlpatterns = [
@@ -24,4 +24,5 @@ urlpatterns = [
     path("favorite-model/", FavoriteModelView.as_view(), name="faults-favorite-model"),
     path("favorite-fault-code/", FavoriteFaultCodeView.as_view(), name="faults-favorite-fault-code"),
     path("search-fault-codes/", SearchFaultCodesAPIView.as_view(), name="faults-search-fault-codes"),
+    path("models/<int:pk>/clone/", clone_model_view, name="faults-clone-model"),
 ]

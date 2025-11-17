@@ -73,14 +73,9 @@ class Category(models.Model):
         return self.name    
 
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
+        if self.image:
+            self.image = process_image(self.image, self.image.name)
 
-        if not is_new:
-            old_instance = type(self).objects.get(id=self.id)
-            if self.image and old_instance.image != self.image:
-                # process avatar similar to previous Profile.save behavior
-                self.image = process_image(self.image, self.name)
-        
         super().save(*args, **kwargs)
 
 class Brand(models.Model):
@@ -94,17 +89,10 @@ class Brand(models.Model):
         verbose_name_plural = '03-Markalar'
     
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
+        if self.image:
+            self.image = process_image(self.image, self.image.name)
 
-        if not is_new:
-            old_instance = type(self).objects.get(id=self.id)
-            if self.image and old_instance.image != self.image:
-                # process avatar similar to previous Profile.save behavior
-                self.image = process_image(self.image, self.name)
-        
         super().save(*args, **kwargs)
-    def __str__(self):
-        return self.name
 
 
 class Model(models.Model):
@@ -119,16 +107,13 @@ class Model(models.Model):
         verbose_name_plural = '04-Modeller'
     def __str__(self):
         return self.name
-    def save(self, *args, **kwargs):
-        is_new = self._state.adding
 
-        if not is_new:
-            old_instance = type(self).objects.get(id=self.id)
-            if self.image and old_instance.image != self.image:
-                # process avatar similar to previous Profile.save behavior
-                self.image = process_image(self.image, self.name)
-        
+    def save(self, *args, **kwargs):
+        if self.image:
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
+
 
 #arıza kodları (kombi, kazan arıza kodları)
 class FaultCodes(models.Model):
@@ -143,6 +128,11 @@ class FaultCodes(models.Model):
         verbose_name = '05-Arıza Kodu'
         verbose_name_plural = '05-Arıza Kodları'
 
+    def save(self, *args, **kwargs):
+        if self.image:
+            self.image = process_image(self.image, self.image.name)
+
+        super().save(*args, **kwargs)
     
 
 class SparePartImage(models.Model):
@@ -157,8 +147,8 @@ class SparePartImage(models.Model):
     
     def save(self, *args, **kwargs):
         if self.image:
-            # process image similar to previous Profile.save behavior
-            self.image = process_image(self.image, self.name)
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 
@@ -191,8 +181,8 @@ class ParameterImage(models.Model):
     
     def save(self, *args, **kwargs):
         if self.image:
-            # process image similar to previous Profile.save behavior
-            self.image = process_image(self.image,self.parameter.name)
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 
@@ -237,7 +227,8 @@ class BoilerPartImage(models.Model):
     
     def save(self, *args, **kwargs):
         if self.image:
-            self.image = process_image(self.image, 'kombide_kullanılan_parçalar')
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -265,7 +256,8 @@ class SparePartsDefinitionsImage(models.Model):
     
     def save(self, *args, **kwargs):
         if self.image:
-            self.image = process_image(self.image, 'parça_tanıtımı')
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 #çalışma prensipleri
@@ -310,7 +302,8 @@ class BoilerCardRepairImage(models.Model):
 
     def save(self, *args, **kwargs):
         if self.image:
-            self.image = process_image(self.image, 'kombi_kart_tamiri')
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 #kombi kart tamircileri yada kombi yedek parçacıları
@@ -348,7 +341,8 @@ class InstrumentUsage(models.Model):
 
     def save(self, *args, **kwargs):
         if self.image:
-            self.image = process_image(self.image, 'ölçü_aleti_kullanımı')
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 #videolar
@@ -370,7 +364,8 @@ class Video(models.Model):
         return self.title
     def save(self, *args, **kwargs):
         if self.image:
-            self.image = process_image(self.image, 'video')
+            self.image = process_image(self.image, self.image.name)
+
         super().save(*args, **kwargs)
 
 class RoomTermostat(models.Model):
@@ -397,14 +392,9 @@ class RoomTermostatImage(models.Model):
         verbose_name_plural = '18-Oda Termosatları Resimleri'
 
     def save(self, *args, **kwargs):
-        is_new = self._state.adding
+        if self.image:
+            self.image = process_image(self.image, self.image.name)
 
-        if not is_new:
-            old_instance = type(self).objects.get(id=self.id)
-            if self.image and old_instance.image != self.image:
-                # process avatar similar to previous Profile.save behavior
-                self.image = process_image(self.image)
-        
         super().save(*args, **kwargs)
 
 class FavoriteBrand(models.Model):
