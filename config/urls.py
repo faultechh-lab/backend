@@ -4,7 +4,8 @@ from .views import (
     ConfigView,UserView,UserListView,CompanyView,DefinedDeviceView,DeviceRenewalView,AdminLoginView,
     CategoryView,BrandView,ModelView,FaultCodesView,ParameterView,BoilerPartView,BoilerCardRepairView,
     BoilerWorkingPrincipleView,VideoView,RoomTermostatView,InstrumentUsageView,SparePartsDefinitionsView,
-    BoilerRepairGuideView,BoilerBoardRepairerView,FormView,NewsView,NotificationView,ProductView,OrderNotificationView
+    BoilerRepairGuideView,BoilerBoardRepairerView,FormView,NewsView,NotificationView,ProductView,OrderNotificationView,
+    ExpoPushSendView
 )
 
 
@@ -41,6 +42,8 @@ urlpatterns=[
     path('forms/', FormView.as_view(), name='form-list'),
     path('news/', NewsView.as_view(), name='news-list'),
     path('notification/', NotificationView.as_view(), name='notification-list'),
+    path('notification/<int:id>/', NotificationView.as_view(), name='notification-delete'),
+    path('expo-push-send/', ExpoPushSendView.as_view(), name='expo-push-send'),
     path('product/', ProductView.as_view(), name='product-list'),
     path('order-notification/', OrderNotificationView.as_view(), name='order-notification-list'),
 ]

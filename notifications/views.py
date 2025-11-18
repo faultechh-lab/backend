@@ -25,3 +25,8 @@ class NotificationDeleteView(APIView):
         notification = Notification.objects.get(pk=pk)
         notification.delete()
         return Response({"message": "Notification deleted successfully"},status=status.HTTP_200_OK)
+
+class NotificationMarkAllReadView(APIView):
+    def post(self, request):
+        updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"updated": updated}, status=status.HTTP_200_OK)

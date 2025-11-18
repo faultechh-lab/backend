@@ -377,10 +377,11 @@ class DefinedDeviceSerializer(serializers.ModelSerializer):
 
 class ExpoPushTokenSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
     class Meta:
         model = ExpoPushToken
         fields = ['id', 'user', 'token', 'created_at','username']
-        read_only_fields = ['id', 'created_at','username']
+        read_only_fields = ['id', 'created_at','username','user']
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

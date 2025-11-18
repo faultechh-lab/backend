@@ -2,6 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework import status
+import json
+from urllib import request as urlrequest, error as urlerror
 
 from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,DefinedDeviceSerializer,DeviceRenewalSerializer,CategorySerializer,
                             BrandSerializer,ModelSerializer,FaultCodesSerializer,ParameterSerializer,
@@ -10,7 +12,7 @@ from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,Def
                             BoilerBoardRepairerSerializer,FormSerializer,NewsSerializer,NotificationSerializer,ProductSerializer,
                             OrderNotificationSerializer
                             )
-from accounts.models import User,Company,DefinedDevice,DeviceRenewal
+from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken
 from rest_framework.authtoken.models import Token
 from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parameter,ParameterImage,BoilerCardRepair,BoilerCardRepairImage,Video,RoomTermostat,
                             BoilerWorkingPrinciple,InstrumentUsage,SparePartsDefinitions,BoilerRepairGuide,BoilerBoardRepairer)
@@ -1075,15 +1077,93 @@ class NotificationView(APIView):
             serializer.save()
             return Response(serializer.data,status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def delete(self, request):
+
+    def delete(self, request, id=None):
         try:
-            id = request.query_params.get('id')
-            item = Notification.objects.get(id=id)
+            nid = id or request.query_params.get('id') or request.GET.get('id') or request.data.get('id')
+            item = Notification.objects.get(id=nid)
             item.delete()
-            return Response({"message": "item Başarıyla Silindi"},status=status.HTTP_200_OK)
+            return Response({"message": "item Başarıyla Silindi"}, status=status.HTTP_200_OK)
         except Notification.DoesNotExist:
             return Response({"detail": "item bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+
+class ExpoPushSendView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        title = request.data.get('title') or ''
+        message = request.data.get('message') or ''
+        data = request.data.get('data') or {}
+        type_ = request.data.get('type') or 'info'
+        is_read = bool(request.data.get('is_read'))
+
+        if not title.strip() or not message.strip():
+            return Response({"detail": "Başlık ve mesaj zorunludur"}, status=status.HTTP_400_BAD_REQUEST)
+
+        send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
+        user_id = request.data.get('user')
+        user_ids = request.data.get('user_ids') or []
+        if isinstance(user_ids, str):
+            try:
+                user_ids = json.loads(user_ids)
+            except Exception:
+                user_ids = [uid.strip() for uid in user_ids.split(',') if uid.strip()]
+
+        targets = []
+        if send_all:
+            targets = list(User.objects.all().values_list('id', flat=True))
+        elif user_ids:
+            targets = user_ids
+        elif user_id:
+            targets = [user_id]
+        else:
+            return Response({"detail": "Kullanıcı seçimi zorunlu (tek, çoklu veya tüm)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        tokens = list(ExpoPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
+        if not tokens:
+            return Response({"detail": "Seçilen kullanıcılar için Expo push token bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+
+        messages = [{
+            'to': t,
+            'title': title,
+            'body': message,
+            'sound': 'default',
+            'data': {**({'type': type_} if type_ else {}), **(data if isinstance(data, dict) else {})},
+        } for t in tokens]
+
+        try:
+            req = urlrequest.Request(
+                url='https://exp.host/--/api/v2/push/send',
+                data=json.dumps(messages).encode('utf-8'),
+                headers={'Content-Type': 'application/json'}
+            )
+            with urlrequest.urlopen(req, timeout=10) as resp:
+                resp_body = resp.read().decode('utf-8')
+                try:
+                    payload = json.loads(resp_body)
+                except Exception:
+                    payload = {'raw': resp_body}
+        except urlerror.HTTPError as e:
+            msg = e.read().decode('utf-8') if hasattr(e, 'read') else str(e)
+            return Response({"detail": "Expo push gönderimi başarısız", "error": msg}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as e:
+            return Response({"detail": "Expo push gönderimi sırasında hata", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # İsteğe bağlı: DB Notification kaydı oluştur
+        try:
+            users_qs = User.objects.filter(id__in=targets)
+            for u in users_qs:
+                Notification.objects.create(user=u, title=title, message=message, type=type_, is_read=is_read)
+        except Exception:
+            pass
+
+        return Response({
+            'detail': 'Expo push gönderildi',
+            'target_count': len(targets),
+            'token_count': len(tokens),
+            'expo_response': payload,
+        }, status=status.HTTP_200_OK)
+
 
 class ProductView(APIView):
     permission_classes=[IsAdminUser]
