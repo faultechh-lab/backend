@@ -132,8 +132,12 @@ LANGUAGES = [
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres-faultech',
+        'USER': 'faultech',
+        'PASSWORD': 'ST7YP1sJQPn3KDzN9iCoh5EE8cAcf2iDF15tJgPozPQxRWWPbmCyALlYsBN3M1EB',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
