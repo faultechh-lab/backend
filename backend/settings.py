@@ -1,6 +1,7 @@
 from pathlib import Path
 from decouple import config, Csv
 import os
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -9,26 +10,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-change-in-prod')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
 
-CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "https://faultech.onrender.com",
-    "http://localhost:3000"
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://127.0.0.1:8000,http://localhost:3000', cast=Csv())
+
 CORS_ALLOW_CREDENTIALS = True # Bu ayar TRUE kalmalı
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "https://faultech.onrender.com",
-    "http://localhost:3000"
-]
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://127.0.0.1:8000,http://localhost:3000', cast=Csv())
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -79,6 +73,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'accounts.middleware.LanguageMiddleware',
     'django.middleware.locale.LocaleMiddleware',
@@ -111,9 +106,11 @@ AUTH_USER_MODEL = 'accounts.User'
 
 # Push notifications: FCM server key (read from env/.env)
 FCM_USE_V1 = True
-FCM_SERVER_KEY = "235800340b28cd150d0c48b64bc39ee08f274918"
-FCM_PROJECT_ID = "faultech"
+FCM_SERVER_KEY = config('FCM_SERVER_KEY')
+FCM_PROJECT_ID = config('FCM_PROJECT_ID')
 FCM_SERVICE_ACCOUNT_JSON_PATH = BASE_DIR/"service-account.json"
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -133,11 +130,11 @@ LANGUAGES = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres-faultech',
-        'USER': 'faultech',
-        'PASSWORD': 'ST7YP1sJQPn3KDzN9iCoh5EE8cAcf2iDF15tJgPozPQxRWWPbmCyALlYsBN3M1EB',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),  # örn: postgresql-main
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
@@ -182,6 +179,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
