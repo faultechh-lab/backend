@@ -3,6 +3,7 @@ from django.db import transaction
 from django.core.files.base import ContentFile
 from .models import (
     Model as BoilerModel,
+    Brand,
     FaultCodes,
     SparePartImage,
     Parameter,
@@ -17,7 +18,7 @@ from .models import (
 )
 
 @transaction.atomic
-def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False) -> BoilerModel:
+def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None) -> BoilerModel:
     """
     Clone a Model and its children (FaultCodes with SparePartImage, Parameters with ParameterImage)
     - name_suffix: appended to the model name
@@ -27,7 +28,7 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
     model_fields = {
         "name": f"{getattr(source, 'name', '')}{name_suffix}",
         "category": source.category,
-        "brand": source.brand,
+        "brand": override_brand if override_brand is not None else source.brand,
         "active": (False if make_inactive else getattr(source, "active", True)),
         "image": source.image and ContentFile(source.image.read(), name=os.path.basename(source.image.name)) if source.image else None,
     }
@@ -102,12 +103,12 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             description=getattr(p, "description", None),
             active=p.active,
         )
-        # If translated name_* exists, copy and append suffix to keep uniqueness similar to model
+        # If translated name_* exists, copy
         for lang in LANGS:
             nattr = f"name_{lang}"
             if hasattr(p, nattr):
                 val = getattr(p, nattr) or ""
-                p_kwargs[nattr] = f"{val}{name_suffix}" if val else val
+                p_kwargs[nattr] = val
         # Copy translated description_* if present
         for lang in LANGS:
             dattr = f"description_{lang}"
@@ -260,3 +261,26 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             RoomTermostatImage.objects.bulk_create(new_room_images)
 
     return new_model
+
+
+@transaction.atomic
+def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", make_inactive: bool = False) -> Brand:
+    brand_fields = {
+        "name": f"{getattr(source, 'name', '')}{name_suffix}",
+        "category": source.category,
+        "active": (False if make_inactive else getattr(source, "active", True)),
+        "image": source.image and ContentFile(source.image.read(), name=os.path.basename(source.image.name)) if source.image else None,
+    }
+    LANGS = ("tr", "en", "es", "it", "fr", "ru", "de")
+    for lang in LANGS:
+        attr = f"name_{lang}"
+        if hasattr(source, attr):
+            val = getattr(source, attr) or ""
+            brand_fields[attr] = f"{val}" if val else val
+    new_brand = Brand.objects.create(**brand_fields)
+
+    src_models = list(BoilerModel.objects.filter(brand=source))
+    for m in src_models:
+        clone_model_with_children(m, name_suffix=name_suffix, make_inactive=make_inactive, override_brand=new_brand)
+
+    return new_brand

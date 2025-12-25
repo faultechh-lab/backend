@@ -19,14 +19,14 @@ ALLOWED_HOSTS = ['*']
 
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
-    "http://localhost:5173",
+    "https://faultech.onrender.com",
     "http://localhost:3000"
 ]
 CORS_ALLOW_CREDENTIALS = True # Bu ayar TRUE kalmalı
 
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
-    "http://localhost:5173",
+    "https://faultech.onrender.com",
     "http://localhost:3000"
 ]
 CORS_ALLOW_METHODS = [
@@ -77,11 +77,11 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', 
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'accounts.middleware.LanguageMiddleware',
-    'django.middleware.locale.LocaleMiddleware',  
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -109,6 +109,11 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 AUTH_USER_MODEL = 'accounts.User'
 
+# Push notifications: FCM server key (read from env/.env)
+FCM_USE_V1 = True
+FCM_SERVER_KEY = "235800340b28cd150d0c48b64bc39ee08f274918"
+FCM_PROJECT_ID = "faultech"
+FCM_SERVICE_ACCOUNT_JSON_PATH = BASE_DIR/"service-account.json"
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -188,7 +193,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',        
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'EXCEPTION_HANDLER': 'accounts.exceptions.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [

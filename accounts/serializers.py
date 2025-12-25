@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import User,DeviceRenewal,DefinedDevice,Company,AuditLog,ExpoPushToken, PlanType, MembershipChoices
+from .models import FCMPushToken
 from django.utils.translation import gettext as _
 from django.db.models import Q
 from django.utils import timezone
@@ -265,6 +266,21 @@ class DeviceRenewalCompleteSerializer(serializers.Serializer):
         user.device_info = device_info
         user.save()
 
+        # Owner defined device senkronizasyonu: kullanıcı şirket sahibi ise kayıtları güncelle
+        try:
+            from .models import Company, DefinedDevice
+            company = Company.objects.filter(user=user).first()
+            if company and user.device_id:
+                dd = DefinedDevice.objects.filter(company=company, user=user).first()
+                if dd:
+                    if dd.device_id != user.device_id:
+                        dd.device_id = user.device_id
+                        dd.save(update_fields=['device_id'])
+                else:
+                    DefinedDevice.objects.create(company=company, user=user, device_id=user.device_id)
+        except Exception:
+            pass
+
         attrs['user'] = user
         return attrs
 
@@ -301,8 +317,17 @@ class CompanySerializer(serializers.ModelSerializer):
         now = timezone.now()
         validated_data['membership_created_at'] = now
         validated_data['membership_expires_at'] = now + timedelta(days=365)
-
-        return super().create(validated_data)    
+        instance = super().create(validated_data)
+        try:
+            owner = instance.user
+            if owner and owner.device_id:
+                from .models import DefinedDevice
+                exists = DefinedDevice.objects.filter(company=instance, user=owner).exists()
+                if not exists:
+                    DefinedDevice.objects.create(company=instance, user=owner, device_id=owner.device_id)
+        except Exception:
+            pass
+        return instance    
     def update(self, instance, validated_data):
         user = validated_data.get('user')
         if Company.objects.filter(user=user).exclude(id=instance.id).exists():
@@ -315,6 +340,20 @@ class CompanySerializer(serializers.ModelSerializer):
         instance.password = validated_data.get('password', instance.password)
         instance.membership_expires_at = validated_data.get('membership_expires_at', instance.membership_expires_at)
         instance.save()
+        # Owner defined device senkronizasyonu
+        try:
+            from .models import DefinedDevice
+            owner = instance.user
+            if owner and owner.device_id:
+                dd = DefinedDevice.objects.filter(company=instance, user=owner).first()
+                if dd:
+                    if dd.device_id != owner.device_id:
+                        dd.device_id = owner.device_id
+                        dd.save(update_fields=['device_id'])
+                else:
+                    DefinedDevice.objects.create(company=instance, user=owner, device_id=owner.device_id)
+        except Exception:
+            pass
         return instance
 
 class DefinedDeviceSerializer(serializers.ModelSerializer):
@@ -344,8 +383,11 @@ class DefinedDeviceSerializer(serializers.ModelSerializer):
                 'device_id': _('This device is already registered for the selected company.')
             })
 
-        # 2️⃣ Şirket kullanıcı sınırı dolu mu?
-        if existing_devices.count() >= company.max_users:
+        # 2️⃣ Şirket kullanıcı sınırı dolu mu? (Sahibi her zaman toplam sayıya dahildir)
+        base_count = existing_devices.count()
+        owner_in_list = existing_devices.filter(user=company.user).exists()
+        effective_count = base_count if owner_in_list else (base_count + 1)
+        if effective_count >= company.max_users:
             raise serializers.ValidationError({
                 'user': _('The selected company has reached its maximum user limit.')
             })
@@ -382,6 +424,15 @@ class ExpoPushTokenSerializer(serializers.ModelSerializer):
         model = ExpoPushToken
         fields = ['id', 'user', 'token', 'created_at','username']
         read_only_fields = ['id', 'created_at','username','user']
+
+
+class FCMPushTokenSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    class Meta:
+        model = FCMPushToken
+        fields = ['id', 'user', 'token', 'platform', 'created_at', 'updated_at','username']
+        read_only_fields = ['id', 'created_at','updated_at','username','user']
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

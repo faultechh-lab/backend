@@ -4,6 +4,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework import status
 import json
 from urllib import request as urlrequest, error as urlerror
+from django.conf import settings
 
 from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,DefinedDeviceSerializer,DeviceRenewalSerializer,CategorySerializer,
                             BrandSerializer,ModelSerializer,FaultCodesSerializer,ParameterSerializer,
@@ -12,17 +13,39 @@ from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,Def
                             BoilerBoardRepairerSerializer,FormSerializer,NewsSerializer,NotificationSerializer,ProductSerializer,
                             OrderNotificationSerializer
                             )
-from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken
+from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken, FCMPushToken
 from rest_framework.authtoken.models import Token
 from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parameter,ParameterImage,BoilerCardRepair,BoilerCardRepairImage,Video,RoomTermostat,
                             BoilerWorkingPrinciple,InstrumentUsage,SparePartsDefinitions,BoilerRepairGuide,BoilerBoardRepairer)
-from .models import OnboardModel
+from .models import OnboardModel, ConfigModel
 
 from forms.models import Form
 from news.models import News
 from notifications.models import Notification
 from orders.models import Product,OrderNotification
+import os, json, base64
+from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request as GoogleRequest
+import requests
+SCOPES = ['https://www.googleapis.com/auth/firebase.messaging']
 
+def get_fcm_access_token():
+    try:
+        from google.oauth2.service_account import Credentials
+        from google.auth.transport.requests import Request
+    except Exception as e:
+        raise RuntimeError('google-auth not installed')
+    sa_json = BASE_DIR/"service-account.json"
+    credentials = None
+
+    if sa_json:
+        info = json.loads(sa_json)
+        credentials = Credentials.from_service_account_info(info, scopes=SCOPES)
+    else:
+        raise RuntimeError('FCM servis hesabı bilgisi bulunamadı')
+
+    credentials.refresh(Request())
+    return credentials.token
 class OnboardView(APIView):
     permission_classes=[AllowAny]
 
@@ -61,7 +84,34 @@ class OnboardView(APIView):
 class ConfigView(APIView):
     permission_classes=[AllowAny]
     def get(self, request):
-        return Response({"message": "Config"})
+        configs = ConfigModel.objects.all()
+        data = {}
+        for c in configs:
+            val = c.value
+            if val.lower() == 'true':
+                val = True
+            elif val.lower() == 'false':
+                val = False
+            data[c.name] = val
+        return Response(data)
+
+    def post(self, request):
+        data = request.data
+        if not isinstance(data, dict):
+            return Response({"detail": "Invalid data format"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        for key, value in data.items():
+            # Value'yu string'e çevir
+            val_str = str(value)
+            # Boolean string ise küçük harfe çevirip saklayalım (tutarlılık için)
+            if isinstance(value, bool):
+                val_str = "true" if value else "false"
+            
+            ConfigModel.objects.update_or_create(
+                name=key,
+                defaults={'value': val_str}
+            )
+        return Response({"status": "success"})
 
 
 #### acoounts admin ####
@@ -72,7 +122,7 @@ class AdminLoginView(APIView):
             user = User.objects.get(username=request.data['username'])
             if not user.is_superuser:
                 return Response({"detail": "Buna Yetkiniz Yok"}, status=status.HTTP_401_UNAUTHORIZED)
-            token = Token.objects.get(user=user)
+            token, _ = Token.objects.get_or_create(user=user)
             return Response({"token": token.key}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
                 return Response({"detail": "Kullanıcı Bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
@@ -275,7 +325,7 @@ class BrandView(APIView):
     permission_classes=[IsAdminUser]
     def get(self, request):
         id = request.query_params.get('id')
-        brands = Brand.objects.filter(category_id=id)
+        brands = Brand.objects.filter(category_id=id).order_by('name')
         serializer = BrandSerializer(brands, many=True,context={'request': request})
         return Response(serializer.data,status=status.HTTP_200_OK)
     
@@ -311,7 +361,7 @@ class ModelView(APIView):
     permission_classes=[IsAdminUser]
     def get(self, request):
         id = request.query_params.get('id')
-        models = Model.objects.filter(brand_id = id)
+        models = Model.objects.filter(brand_id = id).order_by('name')
         serializer = ModelSerializer(models, many=True,context={'request': request})
         return Response(serializer.data,status=status.HTTP_200_OK)
     
@@ -1236,3 +1286,170 @@ class OrderNotificationView(APIView):
             return Response({"message": "item Başarıyla Silindi"},status=status.HTTP_200_OK)
         except OrderNotification.DoesNotExist:
             return Response({"detail": "item bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+
+class FCMSendView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        title = request.data.get('title', '').strip()
+        message = request.data.get('message', '').strip()
+        data = request.data.get('data', {})
+        type_ = request.data.get('type', 'info')
+        is_read = bool(request.data.get('is_read'))
+        send_via = str(request.data.get('send_via') or '').lower()
+        platform = str(request.data.get('platform') or '').lower()
+
+        if not title or not message:
+            return Response({"detail": "Başlık ve mesaj zorunludur"}, status=400)
+
+        # --- Target Seçimi ---
+        send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
+        user_id = request.data.get('user')
+        user_ids = request.data.get('user_ids') or []
+
+        if isinstance(user_ids, str):
+            try:
+                user_ids = json.loads(user_ids)
+            except:
+                user_ids = [uid.strip() for uid in user_ids.split(',') if uid.strip()]
+
+        if send_all:
+            targets = list(User.objects.values_list('id', flat=True))
+        elif user_ids:
+            targets = user_ids
+        elif user_id:
+            targets = [user_id]
+        else:
+            return Response({"detail": "Kullanıcı seçimi zorunlu"}, status=400)
+
+        # --- Tokenlar ---
+        fcm_tokens = list(FCMPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
+        expo_tokens = list(ExpoPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
+
+        # --- Mesaj verisi ---
+        payload_data = {
+            **({"type": type_} if type_ else {}),
+            **(data if isinstance(data, dict) else {})
+        }
+
+        # ******************************************************
+        # 🔥 FCM HTTP v1 Gönderim
+        # ******************************************************
+        fcm_results = []
+        fcm_success = False
+        delivery = None
+
+        do_fcm = (send_via != 'expo')
+        if do_fcm and getattr(settings, "FCM_USE_V1", False) and fcm_tokens:
+            try:
+                sa_path = getattr(settings, 'FCM_SERVICE_ACCOUNT_JSON_PATH', None)
+                if not sa_path:
+                    raise RuntimeError('FCM_SERVICE_ACCOUNT_JSON_PATH not configured')
+                with open(sa_path, "r", encoding="utf-8") as f:
+                    info = json.load(f)
+
+                credentials = Credentials.from_service_account_info(
+                    info,
+                    scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+                )
+                credentials.refresh(GoogleRequest())
+                access_token = credentials.token
+
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }
+
+                url = f"https://fcm.googleapis.com/v1/projects/{settings.FCM_PROJECT_ID}/messages:send"
+
+                for token in fcm_tokens:
+                    notif = {"title": title, "body": message}
+                    body = {
+                        "message": {
+                            "token": token,
+                            "notification": notif,
+                            "data": payload_data
+                        }
+                    }
+                    if platform == 'ios':
+                        body["message"]["apns"] = {
+                            "headers": {"apns-priority": "10"},
+                            "payload": {"aps": {"sound": "default"}}
+                        }
+                    elif platform == 'android':
+                        body["message"]["android"] = {
+                            "notification": {"channel_id": "default"}
+                        }
+                    r = requests.post(url, headers=headers, json=body, timeout=10)
+                    try:
+                        fcm_results.append(r.json())
+                    except:
+                        fcm_results.append({"raw": r.text})
+
+                fcm_success = True
+                delivery = "fcm_v1"
+
+            except Exception as e:
+                fcm_results = {"error": str(e)}
+                fcm_success = False
+                delivery = "fcm_v1_error"
+
+        # ******************************************************
+        # 🔥 FCM çalışmadı → EXPO fallback
+        # ******************************************************
+        expo_results = None
+        do_expo = (send_via == 'expo') or (not fcm_success and send_via != 'fcm')
+        if do_expo and expo_tokens:
+            try:
+                messages = [{
+                    "to": t,
+                    "title": title,
+                    "body": message,
+                    "sound": "default",
+                    **({"badge": 1} if platform == 'ios' else {}),
+                    **({"channelId": "default"} if platform == 'android' else {}),
+                    "data": payload_data
+                } for t in expo_tokens]
+
+                resp = requests.post(
+                    "https://exp.host/--/api/v2/push/send",
+                    json=messages,
+                    timeout=10
+                )
+
+                try:
+                    expo_results = resp.json()
+                except:
+                    expo_results = {"raw": resp.text}
+
+                delivery = "expo"
+
+            except Exception as e:
+                delivery = "expo_error"
+                expo_results = {"error": str(e)}
+
+        # ******************************************************
+        # 🔥 Bildirim Kaydı
+        # ******************************************************
+        try:
+            users = User.objects.filter(id__in=targets)
+            for u in users:
+                Notification.objects.create(
+                    user=u, title=title, message=message,
+                    type=type_, is_read=is_read
+                )
+        except:
+            pass
+
+        # ******************************************************
+        # 🔥 Response
+        # ******************************************************
+        return Response({
+            "detail": "Push işlemi tamamlandı",
+            "targets": len(targets),
+            "fcm_tokens": len(fcm_tokens),
+            "expo_tokens": len(expo_tokens),
+            "delivery": delivery,
+            "fcm_results": fcm_results,
+            "expo_results": expo_results,
+        })

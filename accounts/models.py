@@ -246,6 +246,23 @@ class ExpoPushToken(models.Model):
 
 
 
+class FCMPushToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=255, unique=True)
+    platform = models.CharField(max_length=20, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.token}"
+        
+    class Meta:
+        verbose_name_plural = 'FCM Push Tokens'
+        unique_together = ('user', 'token')
+
+
+
+
 class DeviceRenewal(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='device_renewals')
     device_id = models.CharField(max_length=50, blank=True, null=True)

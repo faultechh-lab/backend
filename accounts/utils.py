@@ -198,38 +198,31 @@ def send_welcome_email(user, lang=None):
 
 
 def send_new_device_email(user, lang=None):
-    """Send an email notifying the user that a new device has been registered.
+    """Send a simplified email notifying the user that the device was changed.
 
-    This should be called right after a device renewal completes and the
-    user's `device_id`/`device_info` are updated.
+    No device identifiers or details are included for privacy. Only a generic
+    confirmation message is sent.
     """
 
     if lang:
         translation.activate(lang)
 
-    subject = _("New device registered")
+    subject = _("Device changed")
     greeting = _("Hello {first_name},").format(first_name=(user.first_name or user.username or ""))
-    intro = _("A new device was just linked to your account.")
-    details_label = _("Device details:")
-    device_id_label = _("Device ID:")
-    device_info_label = _("Device Info:")
+    message_line = _("Your login device has been changed successfully.")
     outro = _("If this wasn’t you, please secure your account immediately.")
 
-    # Text body
+    # Text body (no device details)
     text_body = "\n".join([
         subject,
         "",
         greeting,
-        intro,
-        "",
-        details_label,
-        f"{device_id_label} {getattr(user, 'device_id', '') or '-'}",
-        f"{device_info_label} {getattr(user, 'device_info', '') or '-'}",
+        message_line,
         "",
         outro,
     ])
 
-    # HTML body aligned with other templates
+    # Minimal HTML body
     html_body = f"""
     <!DOCTYPE html>
     <html lang=\"en\">
@@ -242,28 +235,20 @@ def send_new_device_email(user, lang=None):
         .wrap {{ width:100%; padding:24px 0; }}
         .card {{ width:100%; max-width:720px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05),0 12px 24px rgba(0,0,0,0.06); }}
         .header {{ display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef2f7; }}
-        .logo {{ width:36px; height:36px; border-radius:8px; background:#6366f1; display:inline-block; }}
         .title {{ font-weight:700; color:#0f172a; font-size:16px; }}
         .band {{ background:#111827; color:#fff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
         .content {{ padding:22px; }}
-        .label {{ font-weight:700; color:#111827; margin:0 0 8px 0; }}
-        .row {{ margin:6px 0; color:#374151; }}
         .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding:0 22px 18px 22px; }}
       </style>
     </head>
     <body>
       <div class=\"wrap\">
         <div class=\"card\">
-          <div class="header">
-            <div class="title">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div>
-          </div>
-          <div class="band">{subject}</div>
+          <div class=\"header\"><div class=\"title\">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div></div>
+          <div class=\"band\">{subject}</div>
           <div class=\"content\">
             <p>{greeting}</p>
-            <p>{intro}</p>
-            <p class=\"label\">{details_label}</p>
-            <p class=\"row\"><strong>{device_id_label}</strong> {getattr(user, 'device_id', '') or '-'}</p>
-            <p class=\"row\"><strong>{device_info_label}</strong> {getattr(user, 'device_info', '') or '-'}</p>
+            <p>{message_line}</p>
             <p style=\"margin-top:16px; color:#6b7280;\">{outro}</p>
           </div>
           <div class=\"footer\">{getattr(settings, 'SITE_NAME', 'FaulTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}</div>

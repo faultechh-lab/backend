@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (CategoryListView,BrandListView,ModelListView,FaultCodesListView,ParameterListView,BoilerBoardRepairerView,
 SparePartsDefinitionsView,BoilerWorkingPrincipleView,BoilerCardRepairView,InstrumentUsageView,VideoListView,RoomTermostatView,
 FavoriteBrandView,FavoriteModelView,FavoriteFaultCodeView,BoilerRepairGuideView,BoilerPartView,SearchFaultCodesAPIView,
-clone_model_view)
+clone_model_view, clone_brand_view)
 
 
 urlpatterns = [
@@ -25,4 +25,5 @@ urlpatterns = [
     path("favorite-fault-code/", FavoriteFaultCodeView.as_view(), name="faults-favorite-fault-code"),
     path("search-fault-codes/", SearchFaultCodesAPIView.as_view(), name="faults-search-fault-codes"),
     path("models/<int:pk>/clone/", clone_model_view, name="faults-clone-model"),
+    path("brands/<int:pk>/clone/", clone_brand_view, name="faults-clone-brand"),
 ]

@@ -11,7 +11,7 @@ from forms.models import FormImage,Form
 from news.models import News
 from notifications.models import Notification
 from orders.models import Product,OrderNotification, OrderStatus
-from accounts.models import MembershipChoices
+from accounts.models import MembershipChoices,FCMPushToken
 from django.utils import timezone
 from datetime import timedelta
 
@@ -21,12 +21,17 @@ class OnboardSerializer(serializers.ModelSerializer):
         fields ='__all__'
 
 class UserSerializer(serializers.ModelSerializer):
+    platform = serializers.SerializerMethodField()
     class Meta:
         model = User
         exclude =('password','groups','user_permissions','verification_code',
         'verification_code_sent_at','device_renewals_code','device_renewals_code_sent_at','password_reset_code',
         'password_reset_code_sent_at',
         )
+
+    def get_platform(self, obj):
+        token = FCMPushToken.objects.filter(user=obj).order_by('-updated_at').first()
+        return token.platform if token else None
 
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:

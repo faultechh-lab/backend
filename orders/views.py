@@ -99,7 +99,7 @@ class OrderNotificationCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def _send_notification_email(self, user, notif: OrderNotification):
-        subject = "Faultech Ödeme Bildirimi"
+        subject = f"Yeni Ödeme Bildirimi - {notif.order_number}"
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
         admin_mail = getattr(settings, 'ORDER_NOTIFICATION_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
         to = [admin_mail] if admin_mail else []
@@ -117,7 +117,7 @@ class OrderNotificationCreateView(APIView):
         html_body = f"""
         <html><body>
         <div style='font-family:Arial,Helvetica,sans-serif;color:#0f172a;'>
-          <h2 style='margin:0 0 12px 0;'>Faultech Ödeme Bildirimi</h2>
+          <h2 style='margin:0 0 12px 0;'>Yeni Ödeme Bildirimi</h2>
           <p><strong>Kullanıcı:</strong> {user.username}</p>
           <p><strong>Email:</strong> {user.email}</p>
           <p><strong>Ürün:</strong> {getattr(notif.product, 'title', '-')}</p>

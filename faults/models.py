@@ -28,9 +28,12 @@ def process_image(image_field,image_name, max_size=(1200, 1200), quality=90):
     """Görüntüyü işleyip WebP formatına dönüştüren yardımcı fonksiyon"""
     if not image_field:
         return None
-        
+
     img = Image.open(image_field)
-    
+
+    if img.format == 'GIF':
+        return image_field
+
     # RGBA görüntüleri RGB'ye dönüştür
     if img.mode in ('RGBA', 'LA'):
         background = Image.new('RGB', img.size, 'white')
@@ -41,10 +44,11 @@ def process_image(image_field,image_name, max_size=(1200, 1200), quality=90):
     if img.width > max_size[0] or img.height > max_size[1]:
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
 
+
     # WebP olarak kaydet
     buffer = BytesIO()
     img.save(buffer, format='WebP', quality=quality, method=6, lossless=False)
-                
+
     # Yeni dosya adı oluştur
     new_name = _new_webp_name(image_field)
     return File(buffer, name=new_name)
@@ -68,9 +72,9 @@ class Category(models.Model):
     class Meta:
         verbose_name = '02-Kategori'
         verbose_name_plural = '02-Kategoriler'
-    
+
     def __str__(self):
-        return self.name    
+        return self.name
 
     def save(self, *args, **kwargs):
         if self.image:
@@ -83,11 +87,11 @@ class Brand(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name='brands')
     image=models.ImageField(upload_to='brand_images/',blank=True,null=True,verbose_name='Marka Resmi')
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '03-Marka'
         verbose_name_plural = '03-Markalar'
-    
+
     def save(self, *args, **kwargs):
         if self.image:
             self.image = process_image(self.image, self.image.name)
@@ -101,7 +105,7 @@ class Model(models.Model):
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, null=True, blank=True, related_name='models')
     image=models.ImageField(upload_to='model_images/',blank=True,null=True,verbose_name='Model Resmi')
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '04-Model'
         verbose_name_plural = '04-Modeller'
@@ -133,18 +137,18 @@ class FaultCodes(models.Model):
             self.image = process_image(self.image, self.image.name)
 
         super().save(*args, **kwargs)
-    
+
 
 class SparePartImage(models.Model):
     fault_code = models.ForeignKey(FaultCodes, on_delete=models.CASCADE, related_name='spare_part_images')
     name = models.CharField(max_length=100,blank=True,null=True,verbose_name='Yedek Parça Adı')
     image = models.ImageField(upload_to='spare_part_pictures/', verbose_name='Yedek Parça Resmi')
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '06-Yedek Parça Resmi'
         verbose_name_plural = '06-Yedek Parça Resimleri'
-    
+
     def save(self, *args, **kwargs):
         if self.image:
             self.image = process_image(self.image, self.image.name)
@@ -161,11 +165,11 @@ class Parameter(models.Model):
     model = models.ForeignKey(Model, on_delete=models.CASCADE, null=True, blank=True, related_name='parameters')
     description = models.TextField(blank=True, null=True, verbose_name='Açıklama')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '07-Parametre'
         verbose_name_plural = '07-Parametreler'
-    
+
     def __str__(self):
         return f"{self.name} - {self.brand.name if self.brand_id else ''}"
 
@@ -174,11 +178,11 @@ class ParameterImage(models.Model):
     parameter = models.ForeignKey(Parameter, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='parameter_images/', verbose_name='Parametre Resmi')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '08-Parametre Resmi'
         verbose_name_plural = '08-Parametre Resimleri'
-    
+
     def save(self, *args, **kwargs):
         if self.image:
             self.image = process_image(self.image, self.image.name)
@@ -192,7 +196,7 @@ class BoilerRepairGuide(models.Model):
     title = models.CharField(max_length=150, verbose_name='Başlık',blank=True,null=True)
     content = models.TextField(verbose_name='Yazı')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '09-Kombi Tamiri Nasıl Yapılır'
         verbose_name_plural = '09-Kombi Tamiri Nasıl Yapılır'
@@ -208,11 +212,11 @@ class BoilerPart(models.Model):
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='boiler_parts', null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='boiler_parts', null=True, blank=True)
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '10-Kombide Kullanılan Parça'
         verbose_name_plural = '10-Kombide Kullanılan Parçalar'
-    
+
     def __str__(self):
         return self.name
 
@@ -220,11 +224,11 @@ class BoilerPartImage(models.Model):
     boiler_part = models.ForeignKey(BoilerPart, on_delete=models.CASCADE, related_name='boiler_part_images')
     image = models.ImageField(upload_to='boiler_part_images/', verbose_name='Parça Resmi')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '10-Kombide Kullanılan Parça Resmi'
         verbose_name_plural = '10-Kombide Kullanılan Parça Resimleri'
-    
+
     def save(self, *args, **kwargs):
         if self.image:
             self.image = process_image(self.image, self.image.name)
@@ -240,20 +244,20 @@ class SparePartsDefinitions(models.Model):
     name = models.CharField(max_length=150, verbose_name='Parça Adı')
     description = models.TextField(blank=True, null=True, verbose_name='Açıklama')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '11-Parça Tanıtımı'
         verbose_name_plural = '11-Parça Tanıtımı'
-    
+
 class SparePartsDefinitionsImage(models.Model):
     spare_parts_definitions = models.ForeignKey(SparePartsDefinitions, on_delete=models.CASCADE, related_name='spare_parts_definitions_images')
     image = models.ImageField(upload_to='spare_parts_definitions_images/', verbose_name='Parça Tanıtımı Resmi')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '11-Parça Tanıtımı Resmi'
         verbose_name_plural = '11-Parça Tanıtımı Resimleri'
-    
+
     def save(self, *args, **kwargs):
         if self.image:
             self.image = process_image(self.image, self.image.name)
@@ -265,7 +269,7 @@ class BoilerWorkingPrinciple(models.Model):
     title = models.CharField(max_length=200, verbose_name='Başlık')
     description = models.TextField(verbose_name='Açıklama')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '12-Çalışma Prensibi'
         verbose_name_plural = '12-Çalışma Prensipleri'
@@ -282,7 +286,7 @@ class BoilerCardRepair(models.Model):
     description = models.TextField(verbose_name='Açıklama')
     video_url = models.URLField(blank=True, null=True, verbose_name='Video Linki')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '13-Kombi Kart Tamiri'
         verbose_name_plural = '13-Kombi Kart Tamiri'
@@ -295,7 +299,7 @@ class BoilerCardRepairImage(models.Model):
     boiler_card_repair = models.ForeignKey(BoilerCardRepair, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='boiler_card_repair_images/', verbose_name='Resim')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '14-Kombi Kart Tamiri Resmi'
         verbose_name_plural = '14-Kombi Kart Tamiri Resimleri'
@@ -317,7 +321,7 @@ class BoilerBoardRepairer(models.Model):
     email = models.EmailField(blank=True, null=True, verbose_name='E-posta')
     website = models.URLField(blank=True, null=True, verbose_name='Web')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '15-Kombi Kart Tamircisi'
         verbose_name_plural = '15-Kombi Kart Tamircileri'
@@ -331,7 +335,7 @@ class InstrumentUsage(models.Model):
     content = models.TextField(verbose_name='Yazı')
     image = models.ImageField(upload_to='instrument_usage_images/', blank=True, null=True, verbose_name='Resim')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '16-Ölçü Aleti Kullanımı'
         verbose_name_plural = '16-Ölçü Aleti Kullanımı'
@@ -355,7 +359,7 @@ class Video(models.Model):
     video_url = models.URLField(verbose_name='Video Linki')
     image = models.ImageField(upload_to='video_images/', blank=True, null=True, verbose_name='Resim')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '17-Videolar'
         verbose_name_plural = '17-Videolar'
@@ -375,7 +379,7 @@ class RoomTermostat(models.Model):
     model = models.ForeignKey(Model, on_delete=models.CASCADE, related_name='room_thermostats', null=True, blank=True)
     description = models.TextField(verbose_name='Açıklama')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '18-Oda Termosatları'
         verbose_name_plural = '18-Oda Termosatları'
@@ -386,7 +390,7 @@ class RoomTermostatImage(models.Model):
     room_thermostat = models.ForeignKey(RoomTermostat, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='room_thermostat_images/', verbose_name='Resim')
     active = models.BooleanField(default=True, verbose_name='Gösterilsin mi?')
-    
+
     class Meta:
         verbose_name = '18-Oda Termosatları Resmi'
         verbose_name_plural = '18-Oda Termosatları Resimleri'
@@ -417,13 +421,12 @@ class FavoriteModel(models.Model):
         unique_together = ('user', 'model')
         verbose_name = '20-Favori Model'
         verbose_name_plural = '20-Favori Model'
-    
+
 class FavoriteFaultCode(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorite_fault_codes')
     fault = models.ForeignKey(FaultCodes, on_delete=models.CASCADE, related_name='favorite_fault_codes')
-    
+
     class Meta:
         unique_together = ('user', 'fault')
         verbose_name = '21-Favori Hata Kodu'
         verbose_name_plural = '21-Favori Hata Kodları'
-    

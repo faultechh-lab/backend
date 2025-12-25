@@ -7,7 +7,8 @@ from .views import (
     , CompanyDeleteView, UserListView, DefinedDeviceCreateView, 
     DefinedDeviceUpdate,DefinedDeviceListView,DefinedDeviceDetailView,DefinedDeviceDeleteView,
     ExpoPushTokenCreateView, ExpoPushTokenUpdate, ExpoPushTokenListView,ExpoPushTokenDetailView,
-    AuditLogListView,
+    FCMPushTokenCreateView, FCMPushTokenUpdate, FCMPushTokenListView, FCMPushTokenDetailView,
+    AuditLogListView, AccountDeleteView,
 )
 
 urlpatterns = [
@@ -41,7 +42,12 @@ urlpatterns = [
     path('expo-push-token-update/', ExpoPushTokenUpdate.as_view(), name='expo-push-token-update'),
     path('expo-push-token-list/', ExpoPushTokenListView.as_view(), name='expo-push-token-list'),
     path('expo-push-token-detail/', ExpoPushTokenDetailView.as_view(), name='expo-push-token-detail'),
+    path('fcm-push-token-create/', FCMPushTokenCreateView.as_view(), name='fcm-push-token-create'),
+    path('fcm-push-token-update/', FCMPushTokenUpdate.as_view(), name='fcm-push-token-update'),
+    path('fcm-push-token-list/', FCMPushTokenListView.as_view(), name='fcm-push-token-list'),
+    path('fcm-push-token-detail/', FCMPushTokenDetailView.as_view(), name='fcm-push-token-detail'),
     path('audit-logs/', AuditLogListView.as_view(), name='audit-logs'),
+    path('account-delete/', AccountDeleteView.as_view(), name='account-delete'),
     
 
-] 
+]

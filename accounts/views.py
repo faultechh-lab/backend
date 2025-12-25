@@ -1,6 +1,6 @@
 from django.shortcuts import render
 import uuid
-from .models import User,DeviceRenewal,DefinedDevice,Company,ExpoPushToken, PlanType
+from .models import User,DeviceRenewal,DefinedDevice,Company,ExpoPushToken, FCMPushToken, PlanType
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -17,7 +17,8 @@ from .serializers import (
     DefinedDeviceSerializer,
     CompanySerializer,
     ExpoPushTokenSerializer,
-    
+    FCMPushTokenSerializer,
+
     AuditLogSerializer,
 )
 from rest_framework.views import APIView
@@ -49,7 +50,7 @@ class RegisterView(APIView):
         data = request.data.copy()
         incoming_device_id = data.get('device_id')
         incoming_device_info = data.get('device_info')
-        
+
         if not incoming_device_id or str(incoming_device_id).strip() in ('', 'null', 'None'):
             generated_device_id = str(uuid.uuid4())
             data['device_id'] = generated_device_id
@@ -61,15 +62,15 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             update_last_login(None, user)
-            
-         
+
+
             try:
                 send_welcome_email(user, lang)
             except Exception as e:
                 logger.error(f"Welcome email error: {str(e)}")
 
             token, _ = Token.objects.get_or_create(user=user)
-            
+
             return Response({
                 'user': {
                     'id': str(user.id),
@@ -103,7 +104,7 @@ class VerifyEmailView(APIView):
         if user.verify_code(code):
             user.is_verified = True
             user.save(update_fields=["is_verified"])
-                        
+
             return Response({"detail": _("Email verified successfully")}, status=status.HTTP_200_OK)
 
         return Response({"detail": _("Invalid or expired verification code")}, status=status.HTTP_400_BAD_REQUEST)
@@ -115,7 +116,7 @@ class VerifyEmailResendView(APIView):
         translation.activate(lang)
         request.LANGUAGE_CODE = lang
         email = request.data.get("email")
-        
+
         if not email:
             return Response({"detail": _("Email is required")}, status=status.HTTP_400_BAD_REQUEST)
         user = get_object_or_404(User, email=email)
@@ -123,7 +124,7 @@ class VerifyEmailResendView(APIView):
             return Response({"detail": _("Email already verified")}, status=status.HTTP_400_BAD_REQUEST)
         try:
             user.generate_verification_code()
-            user.save(update_fields=["verification_code", "verification_code_sent_at"])            
+            user.save(update_fields=["verification_code", "verification_code_sent_at"])
             send_welcome_email(user, lang)
         except Exception as e:
             logger.error(f"Welcome email error: {str(e)}")
@@ -140,11 +141,10 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data["user"]
-            update_last_login(None, user)            
+            update_last_login(None, user)
             token, created = Token.objects.get_or_create(user=user)
-            device_id = request.data.get('device_id')
-            if device_id == user.device_id:
-         
+            if user.is_superuser:
+
                 return Response({
                     'user': {
                         'id': str(user.id),
@@ -152,14 +152,27 @@ class LoginView(APIView):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
-                        
+
                     },
                     'token': token.key,
                 }, status=status.HTTP_200_OK)
-            
+
+            device_id = request.data.get('device_id')
+            if device_id == user.device_id:
+                return Response({
+                    'user': {
+                        'id': str(user.id),
+                        'username': user.username,
+                        'email': user.email,
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+
+                    },
+                    'token': token.key,
+                }, status=status.HTTP_200_OK)
             else:
                 return Response({"detail":_("Login from registered device only")}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -169,16 +182,57 @@ class LogoutView(APIView):
         lang = request.GET.get("lang")
         translation.activate(lang)
         request.LANGUAGE_CODE = lang
-        
+
         # Audit log: Çıkış
         create_audit_log(
             user=request.user,
             action=AuditLog.ActionChoices.LOGOUT,
             request=request
         )
-        
+
         request.user.auth_token.delete()
         return Response({"detail":_("Logged out successfully")}, status=status.HTTP_200_OK)
+
+class AccountDeleteView(APIView):
+    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+
+
+    @transaction.atomic
+    def post(self, request):
+        lang = request.GET.get("lang")
+        translation.activate(lang)
+        request.LANGUAGE_CODE = lang
+
+        user = request.user
+        pwd = request.data.get("password")
+        if pwd and not user.check_password(pwd):
+            return Response({"detail": _("Invalid password")}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            try:
+                Token.objects.filter(user=user).delete()
+            except Exception:
+                pass
+            try:
+                ExpoPushToken.objects.filter(user=user).delete()
+            except Exception:
+                pass
+            try:
+                FCMPushToken.objects.filter(user=user).delete()
+            except Exception:
+                pass
+
+            create_audit_log(
+                user=user,
+                action=AuditLog.ActionChoices.PROFILE_UPDATE,
+                request=request,
+            )
+
+            user.delete()
+            return Response({"detail": _("Account deleted successfully")}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Account delete error: {str(e)}")
+            return Response({"detail": _("Account deletion failed")}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CheckAuthView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -215,7 +269,7 @@ class UserProfileView(APIView):
         serializer = UserProfileSerializer(request.user, data=request.data, partial=True, context={"request": request})
         if serializer.is_valid():
             serializer.save()
-            
+
             # Audit log: Profil güncelleme
             create_audit_log(
                 user=request.user,
@@ -223,7 +277,7 @@ class UserProfileView(APIView):
                 request=request,
                 details={'updated_fields': list(request.data.keys())}
             )
-            
+
             return Response(serializer.data,status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -251,7 +305,7 @@ class PasswordResetResendView(APIView):
     permission_classes = [permissions.AllowAny]
     throttle_scope = "password_reset"
     throttle_classes = [AnonRateThrottle]
-    
+
     def post(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -297,16 +351,16 @@ class PasswordResetCompleteView(APIView):
             user.password_reset_code = None
             user.password_reset_code_sent_at = None
             user.save(update_fields=['password_reset_code', 'password_reset_code_sent_at', 'password'])
-            
+
             # Audit log: Şifre sıfırlama
             create_audit_log(
                 user=user,
                 action=AuditLog.ActionChoices.PASSWORD_RESET,
                 request=request
             )
-            
+
             return Response({'detail': _('Password reset successfully')}, status=status.HTTP_200_OK)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -319,7 +373,7 @@ class DeviceRenewalRequestView(APIView):
         request.LANGUAGE_CODE = lang
 
         serializer = DeviceRenewalRequestSerializer(data=request.data)
-        
+
         if serializer.is_valid():
             email = serializer.validated_data['email']
             user = User.objects.get(email__iexact=email)
@@ -331,7 +385,7 @@ class DeviceRenewalRequestView(APIView):
 
 class DeviceRenewalVerifyView(APIView):
     permission_classes = [permissions.AllowAny]
-    
+
     @transaction.atomic
     def post(self, request):
         lang = request.GET.get("lang")
@@ -343,7 +397,7 @@ class DeviceRenewalVerifyView(APIView):
             email = serializer.validated_data['email']
             user = User.objects.get(email__iexact=email)
             device_renewal = DeviceRenewal.objects.create(user=user, device_id=user.device_id, device_info=user.device_info)
-            
+
             user.device_id = None
             user.device_info = None
             user.save(update_fields=['device_renewals_code', 'device_renewals_code_sent_at', 'device_id', 'device_info'])
@@ -363,7 +417,7 @@ class DeviceRenewalCompleteView(APIView):
         data = request.data.copy()
         incoming_device_id = data.get('device_id')
         incoming_device_info = data.get('device_info')
-        
+
         if not incoming_device_id or str(incoming_device_id).strip() in ('', 'null', 'None'):
             generated_device_id = str(uuid.uuid4())
             data['device_id'] = generated_device_id
@@ -386,7 +440,7 @@ class DeviceRenewalCompleteView(APIView):
                 user.user_defined_devices.update(device_id=data['device_id'])
             update_last_login(None, user)
             token, created = Token.objects.get_or_create(user=user)
-                        
+
             try:
                 send_new_device_email(user, lang)
             except Exception as e:
@@ -420,20 +474,20 @@ class PasswordChangeView(APIView):
             user = request.user
             old_password = serializer.validated_data['old_password']
             new_password = serializer.validated_data['new_password']
- 
+
             if not user.check_password(old_password):
                 raise serializers.ValidationError({'old_password': _('Old password is not correct.')})
 
             user.set_password(new_password)
             user.save()
-            
+
             # Audit log: Şifre değiştirme
             create_audit_log(
                 user=user,
                 action=AuditLog.ActionChoices.PASSWORD_CHANGE,
                 request=request
             )
-            
+
             return Response({'detail': _('Password changed successfully')}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -474,8 +528,8 @@ class CompanyCreateView(APIView):
                 pass
 
             return Response({'detail': _('Company created successfully'),'company':serializer.data}, status=status.HTTP_201_CREATED)
-        
-        
+
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class MyCompanyView(APIView):
@@ -488,7 +542,7 @@ class MyCompanyView(APIView):
         company = request.user.companies.first()
         serializer = CompanySerializer(company)
         return Response(serializer.data, status=status.HTTP_200_OK)
-        
+
 class CompanyUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def patch(self, request):
@@ -526,7 +580,7 @@ class CompanyListView(APIView):
 class CompanyDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def delete(self, request,id):        
+    def delete(self, request,id):
         try:
             company = Company.objects.get(id=id)
             users = User.objects.filter(user_defined_devices__company=company)
@@ -564,7 +618,7 @@ class DefinedDeviceCreateView(APIView):
             user.membership_expires_at = company.user.membership_expires_at
             user.membership_created_at = company.user.membership_created_at
             user.save(update_fields=['membership_type', 'membership_status','membership_expires_at','membership_created_at'])
-            
+
             serializer.save(device_id=user.device_id)
             return Response({'detail': _('Defined device created successfully'),'defined_device':serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -625,7 +679,7 @@ class DefinedDeviceDeleteView(APIView):
 #expo push token işlemleri
 class ExpoPushTokenCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -639,7 +693,7 @@ class ExpoPushTokenCreateView(APIView):
 
 class ExpoPushTokenDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get(self, request):
         user = request.user
         try:
@@ -648,10 +702,10 @@ class ExpoPushTokenDetailView(APIView):
             return Response(serializer.data)
         except ExpoPushToken.DoesNotExist:
             return Response({'detail': _('Expo push token not found')}, status=status.HTTP_404_NOT_FOUND)
-            
+
 class ExpoPushTokenUpdate(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def patch(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -665,19 +719,78 @@ class ExpoPushTokenUpdate(APIView):
                 expo_push_token.save()
                 return Response({'detail': _('Expo push token updated successfully')}, status=status.HTTP_200_OK)
             return Response({'detail': _('Expo push token is the same')}, status=status.HTTP_400_BAD_REQUEST)
-                
+
         except ExpoPushToken.DoesNotExist:
             return Response({'detail': _('Expo push token not found')}, status=status.HTTP_404_NOT_FOUND)
 
 class ExpoPushTokenListView(APIView):
     permission_classes = [permissions.IsAdminUser]
-    
+
     def get(self, request):
         expo_push_tokens = ExpoPushToken.objects.all()
         serializer = ExpoPushTokenSerializer(expo_push_tokens, many=True)
         return Response(serializer.data)
 
 
+
+class FCMPushTokenCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        lang = request.GET.get("lang")
+        translation.activate(lang)
+        request.LANGUAGE_CODE = lang
+        user = request.user
+        serializer = FCMPushTokenSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=user)
+            return Response({'detail': _('FCM push token created successfully')}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class FCMPushTokenDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        fcm_token = FCMPushToken.objects.filter(user=user).first()
+        if not fcm_token:
+            return Response({'detail': _('FCM push token not found')}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FCMPushTokenSerializer(fcm_token)
+        return Response(serializer.data)
+
+class FCMPushTokenUpdate(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request):
+        lang = request.GET.get("lang")
+        translation.activate(lang)
+        request.LANGUAGE_CODE = lang
+
+        user = request.user
+        fcm_token = FCMPushToken.objects.filter(user=user).first()
+        if not fcm_token:
+            return Response({'detail': _('FCM push token not found')}, status=status.HTTP_404_NOT_FOUND)
+        token_val = request.data.get('token')
+        platform = request.data.get('platform')
+        changed = False
+        if token_val and fcm_token.token != token_val:
+            fcm_token.token = token_val
+            changed = True
+        if platform and fcm_token.platform != platform:
+            fcm_token.platform = platform
+            changed = True
+        if changed:
+            fcm_token.save()
+            return Response({'detail': _('FCM push token updated successfully')}, status=status.HTTP_200_OK)
+        return Response({'detail': _('FCM push token is the same')}, status=status.HTTP_400_BAD_REQUEST)
+
+class FCMPushTokenListView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        tokens = FCMPushToken.objects.all()
+        serializer = FCMPushTokenSerializer(tokens, many=True)
+        return Response(serializer.data)
 
 class AuditLogListView(APIView):
     """Kullanıcının kendi audit log kayıtlarını listeler"""
@@ -689,18 +802,17 @@ class AuditLogListView(APIView):
             audit_logs = AuditLog.objects.all()
         else:
             audit_logs = AuditLog.objects.filter(user=request.user)
-        
+
         # Pagination için limit ve offset
         limit = int(request.GET.get('limit', 50))
         offset = int(request.GET.get('offset', 0))
-        
+
         total = audit_logs.count()
         audit_logs = audit_logs[offset:offset+limit]
         serializer = AuditLogSerializer(audit_logs, many=True)
         return Response({
             'count': total,
             'results': serializer.data
-        })        
-
+        })
 
 

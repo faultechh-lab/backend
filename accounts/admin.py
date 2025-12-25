@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from .models import User,DefinedDevice,DeviceRenewal,Company,AuditLog,ExpoPushToken
+from .models import User,DefinedDevice,DeviceRenewal,Company,AuditLog,ExpoPushToken,FCMPushToken
 from django.contrib.auth.admin import UserAdmin
 
 # Register your models here.
@@ -90,3 +90,4 @@ admin.site.register(DeviceRenewal, CustomDeviceRenewalAdmin)
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(AuditLog, AuditLogAdmin)
 admin.site.register(ExpoPushToken)
+admin.site.register(FCMPushToken)

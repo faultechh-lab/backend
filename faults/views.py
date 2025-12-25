@@ -1,8 +1,9 @@
 from rest_framework import viewsets, filters, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import Q
-from .models import (    
+from django.db.models import Q, Value
+from django.db.models.functions import Replace
+from .models import (
     Category,
     Brand,
     Model,
@@ -53,9 +54,21 @@ from .serializers import (
 from rest_framework import status
 from django.utils import translation
 from django.db.models import Q
-from .services import clone_model_with_children
+from .services import clone_model_with_children, clone_brand_with_children
+import re
 
 from rest_framework.decorators import api_view, permission_classes
+
+def natural_sort_key(s):
+    """
+    Doğal sıralama için anahtar fonksiyonu.
+    Örnek: 'F1', 'F2', 'F10' sıralamasını sağlar.
+    Hem harf hem rakam içeren stringleri (örn: 'FL1', 'F1') düzgün sıralar.
+    """
+    if not s:
+        return []
+    # Sayıları ve metin parçalarını ayır
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 class CategoryListView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
@@ -74,8 +87,30 @@ def clone_model_view(request, pk):
         return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
     name_suffix = request.data.get("name_suffix", " (kopya)")
     make_inactive = bool(request.data.get("make_inactive", False))
-    new_model = clone_model_with_children(source, name_suffix=name_suffix, make_inactive=make_inactive)
+
+    override_brand_id = request.data.get("override_brand_id")
+    override_brand = None
+    if override_brand_id:
+        try:
+            override_brand = Brand.objects.get(pk=override_brand_id)
+        except Brand.DoesNotExist:
+            return Response({"detail": "Hedef marka bulunamadı"}, status=status.HTTP_400_BAD_REQUEST)
+
+    new_model = clone_model_with_children(source, name_suffix=name_suffix, make_inactive=make_inactive, override_brand=override_brand)
     return Response({"id": new_model.id, "name": new_model.name}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAdminUser])
+def clone_brand_view(request, pk):
+    try:
+        source = Brand.objects.get(pk=pk)
+    except Brand.DoesNotExist:
+        return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+    name_suffix = request.data.get("name_suffix", " (kopya)")
+    make_inactive = bool(request.data.get("make_inactive", False))
+    new_brand = clone_brand_with_children(source, name_suffix=name_suffix, make_inactive=make_inactive)
+    return Response({"id": new_brand.id, "name": new_brand.name}, status=status.HTTP_201_CREATED)
 
 
 class BrandListView(APIView):
@@ -93,10 +128,10 @@ class ModelListView(APIView):
 
     def get(self, request):
         brand_id = request.query_params.get('brand_id')
-        queryset = Model.objects.filter(active=True,brand_id=brand_id)
+        queryset = Model.objects.filter(active=True,brand_id=brand_id).order_by('name')
         serializer = ModelSerializer_(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
-  
+
 
 class FaultCodesListView(APIView):
     permission_classes =[permissions.IsAuthenticatedOrReadOnly]
@@ -106,8 +141,15 @@ class FaultCodesListView(APIView):
         request.LANGUAGE_CODE = lang
 
         id = request.query_params.get('model_id')
+        # DB'den verileri çek (sıralamayı Python tarafında yapacağız)
         queryset = FaultCodes.objects.filter(active=True,model_id=id)
-        serializer = FaultCodesSerializer(queryset, many=True,context={'request':request})
+
+        # Python tarafında doğal sıralama (Natural Sort)
+        # Bu sayede F1, F2, F10, F11 gibi sıralama düzgün çalışır
+        # FL1 gibi farklı prefixleri de destekler
+        sorted_queryset = sorted(queryset, key=lambda x: natural_sort_key(x.code))
+
+        serializer = FaultCodesSerializer(sorted_queryset, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -158,11 +200,17 @@ class BoilerPartView(APIView):
         lang = request.GET.get("lang")
         translation.activate(lang)
         request.LANGUAGE_CODE = lang
-        queryset = BoilerPart.objects.filter(active=True)
+
+        model_id = request.query_params.get('model_id')
+        if model_id:
+            queryset = BoilerPart.objects.filter(active=True, model_id=model_id)
+        else:
+            queryset = BoilerPart.objects.filter(active=True)
+
         serializer = BoilerPartSerializer(queryset, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-#kombi tamiri nasıl yapılır 
+#kombi tamiri nasıl yapılır
 class BoilerRepairGuideView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
     def get(self,request):
@@ -266,7 +314,12 @@ class SearchFaultCodesAPIView(APIView):
         translation.activate(lang)
         request.LANGUAGE_CODE = lang
         search = request.query_params.get('search', '')
-        
+        try:
+            limit = int(request.query_params.get('limit', 25))
+        except Exception:
+            limit = 25
+        limit = max(1, min(limit, 100))
+
         if not search or len(search.strip()) < 2:
             return Response([], status=status.HTTP_200_OK)
 
@@ -274,12 +327,15 @@ class SearchFaultCodesAPIView(APIView):
 
         # 🔍 Search özelliği
         if search:
-            queryset = queryset.filter(
-                Q(code__icontains=search) 
+            normalized = ''.join(search.split())
+            queryset = queryset.annotate(
+                code_nospace=Replace('code', Value(' '), Value(''))
+            ).filter(
+                Q(code_nospace__icontains=normalized)
             )
 
 
-        serializer = SearchFaultCodesSerializer(queryset, many=True,context={'request':request})
+        serializer = SearchFaultCodesSerializer(queryset.order_by('code')[:limit], many=True, context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -305,7 +361,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
 
         parent = params.get("parent", None)
-        
+
         category = params.get("category",None)
         # Varsayılan: sadece root (parent'ı olmayan) kategoriler
         if category is None or str(category).strip().lower() in ("", "null", "none"):
