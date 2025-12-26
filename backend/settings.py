@@ -19,11 +19,11 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://127.0.0.1:8000,https://faultech.onrender.com').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://127.0.0.1:8000,http://e0ok04osw80ck4gwcc8c80g0.5.75.152.139.sslip.io').split(',')
 
 CORS_ALLOW_CREDENTIALS = True # Bu ayar TRUE kalmalı
 
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://127.0.0.1:8000,https://faultech.onrender.com').split(',')
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://127.0.0.1:8000,http://e0ok04osw80ck4gwcc8c80g0.5.75.152.139.sslip.io').split(',')
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
