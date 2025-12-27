@@ -73,7 +73,7 @@ def natural_sort_key(s):
 class CategoryListView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
     def get(self, request):
-        categories = Category.objects.filter(active=True)
+        categories = Category.objects.filter(active=True).order_by('-id')
         serializer = CategorySerializer(categories, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
