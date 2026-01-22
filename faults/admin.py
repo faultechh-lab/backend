@@ -1,5 +1,6 @@
 from django.contrib import admin
 from modeltranslation.admin import TranslationAdmin
+from import_export.admin import ImportExportModelAdmin
 from .models import (
     Category,
     Brand,
@@ -33,7 +34,7 @@ class ChildCategoryInline(admin.TabularInline):  # veya admin.StackedInline
     fk_name = "parent"
     extra = 1
 
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(ImportExportModelAdmin):
     list_display = ("id","name", "parent", "active", "children_count_display", "has_children","type")
     list_filter = ("active",)
     search_fields = ("name",)
@@ -48,13 +49,13 @@ class CategoryAdmin(admin.ModelAdmin):
         return obj.children.exists()
     has_children.boolean = True
 
-class BrandAdmin(admin.ModelAdmin):
+class BrandAdmin(ImportExportModelAdmin):
     list_display = ("name", "category", "active")
     list_filter = ("category", "active")
     search_fields = ("name",)
     autocomplete_fields = ("category",)
 
-class ModelAdmin_(admin.ModelAdmin):
+class ModelAdmin_(ImportExportModelAdmin):
     list_display = ("name",'id', "category", "brand", "active")
     list_filter = ("category", "brand", "active")
     search_fields = ("name",)
@@ -64,7 +65,7 @@ class SparePartImageInline(admin.TabularInline):
     model = SparePartImage
     extra = 1
 
-class FaultCodesAdmin(admin.ModelAdmin):
+class FaultCodesAdmin(ImportExportModelAdmin):
     list_display = ("code", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
     search_fields = ("code", "fault_description", )
@@ -75,7 +76,7 @@ class ParameterImageInline(admin.TabularInline):
     model = ParameterImage
     extra = 1
 
-class ParameterAdmin(admin.ModelAdmin):
+class ParameterAdmin(ImportExportModelAdmin):
     list_display = ("name", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
     search_fields = ("name", "description")
@@ -86,14 +87,14 @@ class BoilerCardRepairImageInline(admin.TabularInline):
     model = BoilerCardRepairImage
     extra = 1
 
-class BoilerCardRepairAdmin(admin.ModelAdmin):
+class BoilerCardRepairAdmin(ImportExportModelAdmin):
     list_display = ("title", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
     search_fields = ("title", "description")
     autocomplete_fields = ("category", "brand", "model")
     inlines = [BoilerCardRepairImageInline]
 
-class BoilerRepairGuideAdmin(admin.ModelAdmin):
+class BoilerRepairGuideAdmin(ImportExportModelAdmin):
     list_display = ("__str__", "active",'title')
     list_filter = ("active",)
     search_fields = ("title",)
@@ -102,7 +103,7 @@ class BoilerPartImageInline(admin.TabularInline):
     model = BoilerPartImage
     extra = 1
 
-class BoilerPartAdmin(admin.ModelAdmin):
+class BoilerPartAdmin(ImportExportModelAdmin):
     list_display = ("name", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
     search_fields = ("name",)
@@ -114,28 +115,28 @@ class SparePartsDefinitionsImageInline(admin.TabularInline):
     model = SparePartsDefinitionsImage
     extra = 1
 
-class SparePartsDefinitionsAdmin(admin.ModelAdmin):
+class SparePartsDefinitionsAdmin(ImportExportModelAdmin):
     list_display = ("name", "active")
     list_filter = ("active",)
     search_fields = ("name",)
     inlines = [SparePartsDefinitionsImageInline]
 
-class BoilerWorkingPrincipleAdmin(admin.ModelAdmin):
+class BoilerWorkingPrincipleAdmin(ImportExportModelAdmin):
     list_display = ("title", "active")
     list_filter = ("active",)
     search_fields = ("title", "description")
 
-class BoilerBoardRepairerAdmin(admin.ModelAdmin):
+class BoilerBoardRepairerAdmin(ImportExportModelAdmin):
     list_display = ("name", "business_type", "city", "phone_number", "active")
     list_filter = ("business_type", "city", "active")
     search_fields = ("name", "address", "phone_number", "email", "website")
 
-class InstrumentUsageAdmin(admin.ModelAdmin):
+class InstrumentUsageAdmin(ImportExportModelAdmin):
     list_display = ("__str__", "active")
     list_filter = ("active",)
     search_fields = ("content",)
 
-class VideoAdmin(admin.ModelAdmin):
+class VideoAdmin(ImportExportModelAdmin):
     list_display = ("title", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
     search_fields = ("title", "description")
@@ -146,24 +147,24 @@ class RoomTermostatImageInline(admin.TabularInline):
     extra = 1
 
     
-class RoomTermostatAdmin(admin.ModelAdmin):
+class RoomTermostatAdmin(ImportExportModelAdmin):
     list_display = ("title", "active")
     list_filter = ("active",)
     search_fields = ("title", "description")
     inlines = [RoomTermostatImageInline]
 
-class FavoriteBrandAdmin(admin.ModelAdmin):
+class FavoriteBrandAdmin(ImportExportModelAdmin):
     list_display = ("user", "brand")
     list_filter = ("user", "brand")
     search_fields = ("user__username", "brand__name")
     
 
-class FavoriteModelAdmin(admin.ModelAdmin):
+class FavoriteModelAdmin(ImportExportModelAdmin):
     list_display = ("user", "model")
     list_filter = ("user", "model")
     search_fields = ("user__username", "model__name")
 
-class FavoriteFaultCodeAdmin(admin.ModelAdmin):
+class FavoriteFaultCodeAdmin(ImportExportModelAdmin):
     list_display = ("user", "fault")
     list_filter = ("user", "fault")
     search_fields = ("user__username", "fault__code")
