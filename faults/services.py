@@ -42,8 +42,7 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
     new_model = BoilerModel.objects.create(**model_fields)
 
     # Clone FaultCodes
-    src_faults = list(FaultCodes.objects.filter(model=source))
-    new_faults = []
+    src_faults = FaultCodes.objects.filter(model=source)
     for fc in src_faults:
         # Base fields
         fc_kwargs = dict(
@@ -64,19 +63,13 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             attr = f"fault_description_{lang}"
             if hasattr(fc, attr):
                 fc_kwargs[attr] = getattr(fc, attr)
-        new_faults.append(FaultCodes(**fc_kwargs))
-    created_faults = FaultCodes.objects.bulk_create(new_faults) if new_faults else []
+        new_fc = FaultCodes.objects.create(**fc_kwargs)
 
-    # Map old fault id -> new fault instance
-    fault_map = {old.id: new for old, new in zip(src_faults, created_faults)}
-
-    # Clone SparePartImage for each fault
-    if fault_map:
-        spares = SparePartImage.objects.filter(fault_code__in=[f.id for f in src_faults]).select_related("fault_code")
-        new_spares = []
+        # Clone SparePartImage for this fault
+        spares = fc.spare_part_images.all()
         for sp in spares:
             sp_kwargs = dict(
-                fault_code=fault_map.get(sp.fault_code_id),
+                fault_code=new_fc,
                 name=getattr(sp, "name", None),
                 image=ContentFile(sp.image.read(), name=os.path.basename(sp.image.name)) if sp.image else None,
                 active=sp.active,
@@ -86,13 +79,10 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
                 nattr = f"name_{lang}"
                 if hasattr(sp, nattr):
                     sp_kwargs[nattr] = getattr(sp, nattr)
-            new_spares.append(SparePartImage(**sp_kwargs))
-        if new_spares:
-            SparePartImage.objects.bulk_create(new_spares)
+            SparePartImage.objects.create(**sp_kwargs)
 
     # Clone Parameters
-    src_params = list(Parameter.objects.filter(model=source))
-    new_params = []
+    src_params = Parameter.objects.filter(model=source)
     for p in src_params:
         # Base fields
         p_kwargs = dict(
@@ -114,25 +104,16 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             dattr = f"description_{lang}"
             if hasattr(p, dattr):
                 p_kwargs[dattr] = getattr(p, dattr)
-        new_params.append(Parameter(**p_kwargs))
-    created_params = Parameter.objects.bulk_create(new_params) if new_params else []
+        new_p = Parameter.objects.create(**p_kwargs)
 
-    # Map old param id -> new param instance
-    param_map = {old.id: new for old, new in zip(src_params, created_params)}
-
-    # Clone ParameterImage for each parameter
-    if param_map:
-        pimages = ParameterImage.objects.filter(parameter__in=[p.id for p in src_params]).select_related("parameter")
-        new_pimages = []
+        # Clone ParameterImage for this parameter
+        pimages = p.images.all()
         for pi in pimages:
             img = ContentFile(pi.image.read(), name=os.path.basename(pi.image.name)) if pi.image else None
-            new_pimages.append(ParameterImage(parameter=param_map.get(pi.parameter_id), image=img, active=pi.active))
-        if new_pimages:
-            ParameterImage.objects.bulk_create(new_pimages)
+            ParameterImage.objects.create(parameter=new_p, image=img, active=pi.active)
 
     # Clone BoilerPart
-    src_parts = list(BoilerPart.objects.filter(model=source))
-    new_parts = []
+    src_parts = BoilerPart.objects.filter(model=source)
     for bp in src_parts:
         bp_kwargs = dict(
             name=getattr(bp, "name", None) or "",
@@ -145,25 +126,16 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             nattr = f"name_{lang}"
             if hasattr(bp, nattr):
                 bp_kwargs[nattr] = getattr(bp, nattr)
-        new_parts.append(BoilerPart(**bp_kwargs))
-    created_parts = BoilerPart.objects.bulk_create(new_parts) if new_parts else []
+        new_bp = BoilerPart.objects.create(**bp_kwargs)
 
-    # Map old part id -> new part instance
-    part_map = {old.id: new for old, new in zip(src_parts, created_parts)}
-
-    # Clone BoilerPartImage
-    if part_map:
-        bp_images = BoilerPartImage.objects.filter(boiler_part__in=[p.id for p in src_parts]).select_related("boiler_part")
-        new_bp_images = []
+        # Clone BoilerPartImage
+        bp_images = bp.boiler_part_images.all()
         for bpi in bp_images:
             img = ContentFile(bpi.image.read(), name=os.path.basename(bpi.image.name)) if bpi.image else None
-            new_bp_images.append(BoilerPartImage(boiler_part=part_map.get(bpi.boiler_part_id), image=img, active=bpi.active))
-        if new_bp_images:
-            BoilerPartImage.objects.bulk_create(new_bp_images)
+            BoilerPartImage.objects.create(boiler_part=new_bp, image=img, active=bpi.active)
 
     # Clone BoilerCardRepair
-    src_repairs = list(BoilerCardRepair.objects.filter(model=source))
-    new_repairs = []
+    src_repairs = BoilerCardRepair.objects.filter(model=source)
     for br in src_repairs:
         br_kwargs = dict(
             title=getattr(br, "title", None) or "",
@@ -182,25 +154,16 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             dattr = f"description_{lang}"
             if hasattr(br, dattr):
                 br_kwargs[dattr] = getattr(br, dattr)
-        new_repairs.append(BoilerCardRepair(**br_kwargs))
-    created_repairs = BoilerCardRepair.objects.bulk_create(new_repairs) if new_repairs else []
+        new_br = BoilerCardRepair.objects.create(**br_kwargs)
 
-    # Map old repair id -> new repair instance
-    repair_map = {old.id: new for old, new in zip(src_repairs, created_repairs)}
-
-    # Clone BoilerCardRepairImage
-    if repair_map:
-        repair_images = BoilerCardRepairImage.objects.filter(boiler_card_repair__in=[r.id for r in src_repairs]).select_related("boiler_card_repair")
-        new_repair_images = []
+        # Clone BoilerCardRepairImage
+        repair_images = br.images.all()
         for ri in repair_images:
             img = ContentFile(ri.image.read(), name=os.path.basename(ri.image.name)) if ri.image else None
-            new_repair_images.append(BoilerCardRepairImage(boiler_card_repair=repair_map.get(ri.boiler_card_repair_id), image=img, active=ri.active))
-        if new_repair_images:
-            BoilerCardRepairImage.objects.bulk_create(new_repair_images)
+            BoilerCardRepairImage.objects.create(boiler_card_repair=new_br, image=img, active=ri.active)
 
     # Clone Video
-    src_videos = list(Video.objects.filter(model=source))
-    new_videos = []
+    src_videos = Video.objects.filter(model=source)
     for v in src_videos:
         v_kwargs = dict(
             title=getattr(v, "title", None) or "",
@@ -220,13 +183,10 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             dattr = f"description_{lang}"
             if hasattr(v, dattr):
                 v_kwargs[dattr] = getattr(v, dattr)
-        new_videos.append(Video(**v_kwargs))
-    if new_videos:
-        Video.objects.bulk_create(new_videos)
+        Video.objects.create(**v_kwargs)
 
     # Clone RoomTermostat
-    src_rooms = list(RoomTermostat.objects.filter(model=source))
-    new_rooms = []
+    src_rooms = RoomTermostat.objects.filter(model=source)
     for rt in src_rooms:
         rt_kwargs = dict(
             title=getattr(rt, "title", None) or "",
@@ -244,21 +204,13 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             dattr = f"description_{lang}"
             if hasattr(rt, dattr):
                 rt_kwargs[dattr] = getattr(rt, dattr)
-        new_rooms.append(RoomTermostat(**rt_kwargs))
-    created_rooms = RoomTermostat.objects.bulk_create(new_rooms) if new_rooms else []
+        new_rt = RoomTermostat.objects.create(**rt_kwargs)
 
-    # Map old room id -> new room instance
-    room_map = {old.id: new for old, new in zip(src_rooms, created_rooms)}
-
-    # Clone RoomTermostatImage
-    if room_map:
-        room_images = RoomTermostatImage.objects.filter(room_thermostat__in=[r.id for r in src_rooms]).select_related("room_thermostat")
-        new_room_images = []
+        # Clone RoomTermostatImage
+        room_images = rt.images.all()
         for rti in room_images:
             img = ContentFile(rti.image.read(), name=os.path.basename(rti.image.name)) if rti.image else None
-            new_room_images.append(RoomTermostatImage(room_thermostat=room_map.get(rti.room_thermostat_id), image=img, active=rti.active))
-        if new_room_images:
-            RoomTermostatImage.objects.bulk_create(new_room_images)
+            RoomTermostatImage.objects.create(room_thermostat=new_rt, image=img, active=rti.active)
 
     return new_model
 
