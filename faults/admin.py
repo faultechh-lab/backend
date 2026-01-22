@@ -188,4 +188,3 @@ admin.site.register(RoomTermostat, RoomTermostatAdmin)
 admin.site.register(FavoriteBrand, FavoriteBrandAdmin)
 admin.site.register(FavoriteModel, FavoriteModelAdmin)
 admin.site.register(FavoriteFaultCode, FavoriteFaultCodeAdmin)
-
