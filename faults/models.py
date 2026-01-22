@@ -88,6 +88,8 @@ class Brand(models.Model):
     image=models.ImageField(upload_to='brand_images/',blank=True,null=True,verbose_name='Marka Resmi')
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
 
+    def __str__(self):
+        return f"{self.name}"
     class Meta:
         verbose_name = '03-Marka'
         verbose_name_plural = '03-Markalar'
@@ -110,7 +112,7 @@ class Model(models.Model):
         verbose_name = '04-Model'
         verbose_name_plural = '04-Modeller'
     def __str__(self):
-        return self.name
+        return f"{self.name} - {self.brand.name}"
 
     def save(self, *args, **kwargs):
         if self.image:

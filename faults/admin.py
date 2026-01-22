@@ -67,7 +67,7 @@ class SparePartImageInline(admin.TabularInline):
 class FaultCodesAdmin(admin.ModelAdmin):
     list_display = ("code", "category", "brand", "model", "active")
     list_filter = ("category", "brand", "model", "active")
-    search_fields = ("code", "fault_description", "possible_reasons", "technical_solution", "short_solution")
+    search_fields = ("code", "fault_description", )
     autocomplete_fields = ("category", "brand", "model")
     inlines = [SparePartImageInline]
 

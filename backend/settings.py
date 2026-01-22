@@ -123,6 +123,7 @@ LANGUAGES = [
     ('ru', 'Russian'),
     ('es', 'Spanish'),
     ('it', 'Italian'),
+    ('ar', 'Arabic'),
 ]
 
 # Database
@@ -160,7 +161,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 MODELTRANSLATION_DEFAULT_LANGUAGE = 'tr'
-MODELTRANSLATION_LANGUAGES = ('tr', 'en', 'de', 'ru', 'es', 'it', 'fr',)
+MODELTRANSLATION_LANGUAGES = ('tr', 'en', 'de', 'ru', 'es', 'it', 'fr', 'ar',)
 MODELTRANSLATION_FALLBACK_LANGUAGES = ('tr', 'en')
 
 LANGUAGE_CODE = 'tr'
