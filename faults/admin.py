@@ -1,7 +1,7 @@
 from django.contrib import admin
 from modeltranslation.admin import TranslationAdmin
 from import_export.admin import ImportExportModelAdmin
-from import_export import resources
+from import_export import resources, fields, widgets
 
 from .models import (
     Category,
@@ -31,6 +31,8 @@ from .models import (
 
 
 class FaultCodesResource(resources.ModelResource):
+    image = fields.Field(column_name='image', attribute='image', widget=widgets.CharWidget())
+
     class Meta:
         model = FaultCodes
         skip_diff = True  # Diff hesaplamayı atla (Hızlandırır)
