@@ -36,6 +36,9 @@ class FaultCodesResource(resources.ModelResource):
     class Meta:
         model = FaultCodes
         skip_diff = True  # Diff hesaplamayı atla (Hızlandırır)
+        # Tüm alanları (çeviriler dahil) otomatik algılaması için fields belirtmiyoruz.
+        # Ancak exclude da kullanmıyoruz.
+
 
 class ChildCategoryInline(admin.TabularInline):  # veya admin.StackedInline
     model = Category
