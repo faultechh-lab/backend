@@ -33,12 +33,23 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         "image": source.image and ContentFile(source.image.read(), name=os.path.basename(source.image.name)) if source.image else None,
     }
     # Also copy translated name_* fields if they exist on the model
-    LANGS = ("tr", "en", "es", "it", "fr", "ru", "de")
+    # name_suffix (kopya) sadece varsayılan dile (tr) eklendiği için
+    # diğer dillerde (en, de vs.) orijinal ismi olduğu gibi kopyalıyoruz.
+    LANGS = ("tr", "en", "es", "it", "fr", "ru", "de", "ar")
     for lang in LANGS:
         attr = f"name_{lang}"
         if hasattr(source, attr):
             val = getattr(source, attr) or ""
-            model_fields[attr] = f"{val}" if val else val
+            # Eğer dil 'tr' (varsayılan) ise suffix'i burada ekleyebiliriz veya yukarıdaki 'name' zaten hallediyor.
+            # Ancak modeltranslation 'name' alanını 'name_tr'ye eşlediği için,
+            # name_tr alanına açıkça atama yaparsak, name alanındaki değişikliği ezebiliriz.
+            # Bu yüzden sadece tr dışındaki dillerde orijinal değeri kopyalıyoruz.
+            if lang != "tr":
+                model_fields[attr] = f"{val}" if val else val
+            else:
+                # name_tr için de suffix ekli halini açıkça belirtelim ki tutarlı olsun
+                model_fields[attr] = f"{val}{name_suffix}" if val else f"{name_suffix.strip()}"
+
     new_model = BoilerModel.objects.create(**model_fields)
 
     # Clone FaultCodes
@@ -49,7 +60,7 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             category=fc.category,
             brand=new_model.brand,
             model=new_model,
-            code=fc.code,
+            code=fc.code, # Varsayılan dil (TR) için code alanı (modeltranslation bunu code_tr'ye eşitler)
             fault_description=getattr(fc, "fault_description", None),
             active=fc.active,
             image=ContentFile(fc.image.read(), name=os.path.basename(fc.image.name)) if fc.image else None,
@@ -58,11 +69,19 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         for lang in LANGS:
             code_attr = f"code_{lang}"
             if hasattr(fc, code_attr):
-                fc_kwargs[code_attr] = getattr(fc, code_attr)
+                val = getattr(fc, code_attr)
+                # TR dışındaki dillerde orijinal değeri koru
+                if lang != "tr":
+                    fc_kwargs[code_attr] = val
+                # TR için suffix eklenmiş hali (eğer code alanı suffixli gelmiyorsa buradan eklenebilir ama genelde gerekmez)
+                
         for lang in LANGS:
             attr = f"fault_description_{lang}"
             if hasattr(fc, attr):
-                fc_kwargs[attr] = getattr(fc, attr)
+                val = getattr(fc, attr)
+                if lang != "tr":
+                    fc_kwargs[attr] = val
+
         new_fc = FaultCodes.objects.create(**fc_kwargs)
 
         # Clone SparePartImage for this fault
@@ -78,7 +97,9 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             for lang in LANGS:
                 nattr = f"name_{lang}"
                 if hasattr(sp, nattr):
-                    sp_kwargs[nattr] = getattr(sp, nattr)
+                    val = getattr(sp, nattr)
+                    if lang != "tr":
+                        sp_kwargs[nattr] = val
             SparePartImage.objects.create(**sp_kwargs)
 
     # Clone Parameters
@@ -98,12 +119,15 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             nattr = f"name_{lang}"
             if hasattr(p, nattr):
                 val = getattr(p, nattr) or ""
-                p_kwargs[nattr] = val
+                if lang != "tr":
+                    p_kwargs[nattr] = val
         # Copy translated description_* if present
         for lang in LANGS:
             dattr = f"description_{lang}"
             if hasattr(p, dattr):
-                p_kwargs[dattr] = getattr(p, dattr)
+                val = getattr(p, dattr)
+                if lang != "tr":
+                    p_kwargs[dattr] = val
         new_p = Parameter.objects.create(**p_kwargs)
 
         # Clone ParameterImage for this parameter
@@ -125,7 +149,9 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         for lang in LANGS:
             nattr = f"name_{lang}"
             if hasattr(bp, nattr):
-                bp_kwargs[nattr] = getattr(bp, nattr)
+                val = getattr(bp, nattr)
+                if lang != "tr":
+                    bp_kwargs[nattr] = val
         new_bp = BoilerPart.objects.create(**bp_kwargs)
 
         # Clone BoilerPartImage
@@ -149,11 +175,15 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         for lang in LANGS:
             tattr = f"title_{lang}"
             if hasattr(br, tattr):
-                br_kwargs[tattr] = getattr(br, tattr)
+                val = getattr(br, tattr)
+                if lang != "tr":
+                    br_kwargs[tattr] = val
         for lang in LANGS:
             dattr = f"description_{lang}"
             if hasattr(br, dattr):
-                br_kwargs[dattr] = getattr(br, dattr)
+                val = getattr(br, dattr)
+                if lang != "tr":
+                    br_kwargs[dattr] = val
         new_br = BoilerCardRepair.objects.create(**br_kwargs)
 
         # Clone BoilerCardRepairImage
@@ -178,11 +208,15 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         for lang in LANGS:
             tattr = f"title_{lang}"
             if hasattr(v, tattr):
-                v_kwargs[tattr] = getattr(v, tattr)
+                val = getattr(v, tattr)
+                if lang != "tr":
+                    v_kwargs[tattr] = val
         for lang in LANGS:
             dattr = f"description_{lang}"
             if hasattr(v, dattr):
-                v_kwargs[dattr] = getattr(v, dattr)
+                val = getattr(v, dattr)
+                if lang != "tr":
+                    v_kwargs[dattr] = val
         Video.objects.create(**v_kwargs)
 
     # Clone RoomTermostat
@@ -199,11 +233,15 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
         for lang in LANGS:
             tattr = f"title_{lang}"
             if hasattr(rt, tattr):
-                rt_kwargs[tattr] = getattr(rt, tattr)
+                val = getattr(rt, tattr)
+                if lang != "tr":
+                    rt_kwargs[tattr] = val
         for lang in LANGS:
             dattr = f"description_{lang}"
             if hasattr(rt, dattr):
-                rt_kwargs[dattr] = getattr(rt, dattr)
+                val = getattr(rt, dattr)
+                if lang != "tr":
+                    rt_kwargs[dattr] = val
         new_rt = RoomTermostat.objects.create(**rt_kwargs)
 
         # Clone RoomTermostatImage
@@ -223,12 +261,16 @@ def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", m
         "active": (False if make_inactive else getattr(source, "active", True)),
         "image": source.image and ContentFile(source.image.read(), name=os.path.basename(source.image.name)) if source.image else None,
     }
-    LANGS = ("tr", "en", "es", "it", "fr", "ru", "de")
+    LANGS = ("tr", "en", "es", "it", "fr", "ru", "de", "ar")
     for lang in LANGS:
         attr = f"name_{lang}"
         if hasattr(source, attr):
             val = getattr(source, attr) or ""
-            brand_fields[attr] = f"{val}" if val else val
+            if lang != "tr":
+                brand_fields[attr] = f"{val}" if val else val
+            else:
+                brand_fields[attr] = f"{val}{name_suffix}" if val else f"{name_suffix.strip()}"
+
     new_brand = Brand.objects.create(**brand_fields)
 
     src_models = list(BoilerModel.objects.filter(brand=source))
