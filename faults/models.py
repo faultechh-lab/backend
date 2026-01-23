@@ -26,10 +26,29 @@ def TypeChoices():
 
 def process_image(image_field,image_name, max_size=(1200, 1200), quality=90):
     """Görüntüyü işleyip WebP formatına dönüştüren yardımcı fonksiyon"""
+    # Dosya yoksa veya path string ise (dosya objesi değilse) işlem yapma
     if not image_field:
         return None
 
-    img = Image.open(image_field)
+    # Eğer image_field bir dosya objesi değilse (örn: string path), işlem yapmadan dön
+    # Bu durum translate scripti çalışırken model save edildiğinde oluşabilir
+    if isinstance(image_field, str):
+        return image_field
+
+    try:
+        # Dosya mevcut mu kontrol et (FieldFile objesi için)
+        if hasattr(image_field, 'path') and not os.path.exists(image_field.path):
+            # Dosya diskte yoksa işlem yapma, olduğu gibi bırak
+            return image_field
+    except Exception:
+        # Path erişiminde hata olursa (örn: S3 storage) devam etmeye çalış
+        pass
+
+    try:
+        img = Image.open(image_field)
+    except (FileNotFoundError, ValueError, OSError):
+        # Dosya açılamıyorsa işlem yapma
+        return image_field
 
     if img.format == 'GIF':
         return image_field
@@ -89,7 +108,11 @@ class Brand(models.Model):
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
 
     def __str__(self):
-        return f"{self.name}"
+        # Eski:
+        return f"{self.name} - {self.category.name if self.category else 'Kategorisiz'}"
+        
+        # Yeni:
+        return f"{self.name} - {self.category.name if self.category else 'Kategorisiz'} (ID: {self.id})"
     class Meta:
         verbose_name = '03-Marka'
         verbose_name_plural = '03-Markalar'
