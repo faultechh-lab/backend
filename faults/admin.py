@@ -55,6 +55,11 @@ class FaultCodesResource(resources.ModelResource):
     class Meta:
         model = FaultCodes
         skip_diff = True  # Diff hesaplamayı atla (Hızlandırır)
+        skip_unchanged = True  # Değişmemiş kayıtları atla
+        report_skipped = False  # Atlanan kayıtları raporlama
+        use_bulk = True  # Bulk insert kullan (Çok daha hızlı)
+        batch_size = 500  # Her seferde 500 kayıt işle
+        use_transactions = True  # Transaction kullan
         # Tüm alanları (çeviriler dahil) açıkça belirtiyoruz
         fields = (
             'id', 'category', 'brand', 'model', 'active', 'image',
