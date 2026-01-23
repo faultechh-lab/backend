@@ -5,6 +5,7 @@ import google.generativeai as genai
 from decouple import config
 from django.core.management.base import BaseCommand
 from django.conf import settings
+from django.db.models import Q
 from faults.models import (
     Category, Brand, Model, FaultCodes, Parameter, SparePartImage,
     BoilerRepairGuide, BoilerPart, SparePartsDefinitions,
@@ -67,9 +68,17 @@ class Command(BaseCommand):
             model_name = ModelClass.__name__
             self.stdout.write(self.style.MIGRATE_HEADING(f'Processing model: {model_name}'))
             
-            objects = ModelClass.objects.all()
+            # Build filter for objects that have at least one missing translation
+            query = Q()
+            for field in fields:
+                for lang_code in TARGET_LANGUAGES.keys():
+                    field_lang = build_localized_fieldname(field, lang_code)
+                    # Check for None or Empty string
+                    query |= Q(**{f"{field_lang}__isnull": True}) | Q(**{f"{field_lang}": ""})
+            
+            objects = ModelClass.objects.filter(query).distinct()
             count = objects.count()
-            self.stdout.write(f'Found {count} objects in {model_name}.')
+            self.stdout.write(f'Found {count} objects in {model_name} needing translation.')
 
             for obj in objects:
                 obj_updated = False
