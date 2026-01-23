@@ -32,12 +32,44 @@ from .models import (
 
 class FaultCodesResource(resources.ModelResource):
     image = fields.Field(column_name='image', attribute='image', widget=widgets.CharWidget())
+    
+    # Çeviri alanlarını açıkça tanımla
+    code_tr = fields.Field(column_name='code_tr', attribute='code_tr')
+    code_en = fields.Field(column_name='code_en', attribute='code_en')
+    code_de = fields.Field(column_name='code_de', attribute='code_de')
+    code_ru = fields.Field(column_name='code_ru', attribute='code_ru')
+    code_es = fields.Field(column_name='code_es', attribute='code_es')
+    code_it = fields.Field(column_name='code_it', attribute='code_it')
+    code_fr = fields.Field(column_name='code_fr', attribute='code_fr')
+    code_ar = fields.Field(column_name='code_ar', attribute='code_ar')
+    
+    fault_description_tr = fields.Field(column_name='fault_description_tr', attribute='fault_description_tr')
+    fault_description_en = fields.Field(column_name='fault_description_en', attribute='fault_description_en')
+    fault_description_de = fields.Field(column_name='fault_description_de', attribute='fault_description_de')
+    fault_description_ru = fields.Field(column_name='fault_description_ru', attribute='fault_description_ru')
+    fault_description_es = fields.Field(column_name='fault_description_es', attribute='fault_description_es')
+    fault_description_it = fields.Field(column_name='fault_description_it', attribute='fault_description_it')
+    fault_description_fr = fields.Field(column_name='fault_description_fr', attribute='fault_description_fr')
+    fault_description_ar = fields.Field(column_name='fault_description_ar', attribute='fault_description_ar')
 
     class Meta:
         model = FaultCodes
         skip_diff = True  # Diff hesaplamayı atla (Hızlandırır)
-        # Tüm alanları (çeviriler dahil) otomatik algılaması için fields belirtmiyoruz.
-        # Ancak exclude da kullanmıyoruz.
+        # Tüm alanları (çeviriler dahil) açıkça belirtiyoruz
+        fields = (
+            'id', 'category', 'brand', 'model', 'active', 'image',
+            'code', 
+            'code_tr', 'code_en', 'code_de', 'code_ru', 'code_es', 'code_it', 'code_fr', 'code_ar',
+            'fault_description', 
+            'fault_description_tr', 'fault_description_en', 'fault_description_de', 'fault_description_ru', 'fault_description_es', 'fault_description_it', 'fault_description_fr', 'fault_description_ar'
+        )
+        export_order = (
+            'id', 'category', 'brand', 'model', 'active', 'image',
+            'code', 
+            'code_tr', 'code_en', 'code_de', 'code_ru', 'code_es', 'code_it', 'code_fr', 'code_ar',
+            'fault_description', 
+            'fault_description_tr', 'fault_description_en', 'fault_description_de', 'fault_description_ru', 'fault_description_es', 'fault_description_it', 'fault_description_fr', 'fault_description_ar'
+        )
 
 
 class ChildCategoryInline(admin.TabularInline):  # veya admin.StackedInline
