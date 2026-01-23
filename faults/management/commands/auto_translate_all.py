@@ -88,13 +88,14 @@ class Command(BaseCommand):
                         continue
 
                     # Identify which languages need translation
-                    # We translate if the target field is empty OR identical to source (which often happens on init)
+                    # We translate ONLY if the target field is empty or None
                     langs_to_translate = []
                     for lang_code in TARGET_LANGUAGES.keys():
                         field_lang = build_localized_fieldname(field, lang_code)
                         current_val = getattr(obj, field_lang, None)
                         
-                        if not current_val or current_val == source_text:
+                        # Sadece boşsa çeviri listesine ekle (str kontrolü ile)
+                        if current_val is None or (isinstance(current_val, str) and not current_val.strip()):
                             langs_to_translate.append(lang_code)
 
                     if not langs_to_translate:
