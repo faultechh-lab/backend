@@ -116,11 +116,22 @@ class Command(BaseCommand):
                         # Construct the prompt for batch translation
                         target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
                         
+                        # Check for max_length constraint
+                        max_len_instruction = ""
+                        simplify_instruction = "Do not simplify or shorten.\n"
+                        
+                        model_field = ModelClass._meta.get_field(field)
+                        if hasattr(model_field, 'max_length') and model_field.max_length:
+                            # If there's a limit, ask to fit within it
+                            max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
+                            simplify_instruction = "" # Remove "Do not shorten" if we have a length limit
+
                         prompt = (
                             "You are a professional technical translator.\n"
                             f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
+                            f"{max_len_instruction}"
                             "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
-                            "Do not simplify or shorten.\n"
+                            f"{simplify_instruction}"
                             "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
                             "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
                             "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
