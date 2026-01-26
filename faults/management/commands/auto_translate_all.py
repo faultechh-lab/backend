@@ -1,11 +1,11 @@
 import time
-import os
 import json
 import google.generativeai as genai
 from decouple import config
 from django.core.management.base import BaseCommand
-from django.conf import settings
 from django.db.models import Q
+from modeltranslation.utils import build_localized_fieldname
+
 from faults.models import (
     Category, Brand, Model, FaultCodes, Parameter, SparePartImage,
     BoilerRepairGuide, BoilerPart, SparePartsDefinitions,
@@ -14,23 +14,20 @@ from faults.models import (
 )
 from orders.models import Product
 from config.models import OnboardModel
-from modeltranslation.utils import build_localized_fieldname
+
 
 class Command(BaseCommand):
-    help = 'Translates database content from Turkish to all supported languages using Gemini API'
+    help = 'Translate database content from Turkish using Gemini with length safety'
 
     def handle(self, *args, **options):
         api_key = config('GEMINI_API_KEY', default=None)
         if not api_key:
-            self.stdout.write(self.style.ERROR('GEMINI_API_KEY not found in .env file.'))
+            self.stdout.write(self.style.ERROR('GEMINI_API_KEY not found'))
             return
 
         genai.configure(api_key=api_key)
-        # Using gemini-2.5-flash for speed and cost efficiency
         model = genai.GenerativeModel('gemini-2.5-flash')
 
-        # Target languages mapping (code -> name)
-        # Source is always 'tr'
         TARGET_LANGUAGES = {
             'en': 'English',
             'de': 'German',
@@ -41,7 +38,14 @@ class Command(BaseCommand):
             'ar': 'Arabic',
         }
 
-        # Models and fields to translate
+        # 🔒 CharField olanlar için HARD LIMIT
+        FIELD_MAX_LENGTHS = {
+            'title': 100,
+            'name': 100,
+            'code': 50,
+            'business_type': 100,
+        }
+
         translation_map = [
             (Category, ['name']),
             (Brand, ['name']),
@@ -62,100 +66,93 @@ class Command(BaseCommand):
             (OnboardModel, ['title', 'description']),
         ]
 
-        total_translated_count = 0
+        total = 0
 
         for ModelClass, fields in translation_map:
-            model_name = ModelClass.__name__
-            self.stdout.write(self.style.MIGRATE_HEADING(f'Processing model: {model_name}'))
-            
-            # Build filter for objects that have at least one missing translation
+            self.stdout.write(self.style.MIGRATE_HEADING(f'{ModelClass.__name__}'))
+
             query = Q()
             for field in fields:
-                for lang_code in TARGET_LANGUAGES.keys():
-                    field_lang = build_localized_fieldname(field, lang_code)
-                    # Check for None or Empty string
-                    query |= Q(**{f"{field_lang}__isnull": True}) | Q(**{f"{field_lang}": ""})
-            
+                for lang in TARGET_LANGUAGES:
+                    f_lang = build_localized_fieldname(field, lang)
+                    query |= Q(**{f"{f_lang}__isnull": True}) | Q(**{f"{f_lang}": ""})
+
             objects = ModelClass.objects.filter(query).distinct()
-            count = objects.count()
-            self.stdout.write(f'Found {count} objects in {model_name} needing translation.')
 
             for obj in objects:
-                obj_updated = False
-                
+                updated = False
+
                 for field in fields:
                     field_tr = build_localized_fieldname(field, 'tr')
-                    
-                    # Get source text (Turkish)
-                    source_text = getattr(obj, field_tr, None)
-                    if not source_text:
-                        # Fallback to base field if specific TR field is empty
-                        source_text = getattr(obj, field, None)
+                    source_text = getattr(obj, field_tr, None) or getattr(obj, field, None)
 
-                    # Skip if source is empty or too short (unless it's a code)
-                    if not source_text or (len(str(source_text).strip()) < 2 and field != 'code'):
+                    if not source_text or len(str(source_text).strip()) < 2:
                         continue
 
-                    # Identify which languages need translation
-                    # We translate ONLY if the target field is empty or None
-                    langs_to_translate = []
-                    for lang_code in TARGET_LANGUAGES.keys():
-                        field_lang = build_localized_fieldname(field, lang_code)
-                        current_val = getattr(obj, field_lang, None)
-                        
-                        # Sadece boşsa çeviri listesine ekle (str kontrolü ile)
-                        if current_val is None or (isinstance(current_val, str) and not current_val.strip()):
-                            langs_to_translate.append(lang_code)
+                    langs = []
+                    for lang in TARGET_LANGUAGES:
+                        f_lang = build_localized_fieldname(field, lang)
+                        val = getattr(obj, f_lang, None)
+                        if not val or not str(val).strip():
+                            langs.append(lang)
 
-                    if not langs_to_translate:
+                    if not langs:
                         continue
 
-                    self.stdout.write(f'Translating {field} for {model_name} ID {obj.id} to {langs_to_translate}...')
+                    max_len = FIELD_MAX_LENGTHS.get(field)
 
-                    try:
-                        # Construct the prompt for batch translation
-                        target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
-                        
-                        prompt = (
-                            "You are a professional technical translator.\n"
-                            f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
-                            "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
-                            "Do not simplify or shorten.\n"
-                            "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
-                            "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
-                            "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
-                            f"Text to translate: {source_text}"
+                    length_rule = ""
+                    if max_len:
+                        length_rule = (
+                            f"- Output MUST be at most {max_len} characters (hard limit)\n"
+                            "- If longer, shorten while preserving meaning\n"
                         )
 
-                        response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
-                        
-                        if response.text:
-                            try:
-                                translations = json.loads(response.text)
-                                
-                                for lang_code, translated_text in translations.items():
-                                    if lang_code in langs_to_translate and translated_text:
-                                        # Clean up if necessary
-                                        if isinstance(translated_text, str):
-                                            translated_text = translated_text.strip()
-                                        
-                                        field_lang = build_localized_fieldname(field, lang_code)
-                                        setattr(obj, field_lang, translated_text)
-                                        obj_updated = True
-                                        total_translated_count += 1
-                                
-                            except json.JSONDecodeError:
-                                self.stdout.write(self.style.ERROR(f'Failed to decode JSON response for {model_name} ID {obj.id}'))
-                                # Fallback or retry logic could go here
-                        
-                        # Rate limiting - simple sleep
-                        time.sleep(2.5) 
+                    prompt = (
+                        "You are a professional technical translator.\n"
+                        f"Translate the following Turkish text into these languages: {', '.join(langs)}.\n"
+                        "Preserve meaning, terminology, units, and formatting.\n"
+                        "Do NOT add explanations.\n"
+                        f"{length_rule}"
+                        "Return ONLY valid JSON.\n"
+                        "Example: {\"en\": \"...\", \"de\": \"...\"}\n\n"
+                        f"Text:\n{source_text}"
+                    )
+
+                    try:
+                        response = model.generate_content(
+                            prompt,
+                            generation_config={"response_mime_type": "application/json"}
+                        )
+
+                        translations = json.loads(response.text)
+
+                        for lang, text in translations.items():
+                            if lang not in langs or not text:
+                                continue
+
+                            text = text.strip()
+
+                            # 🛡️ SON DB EMNİYET KEMERİ
+                            if max_len and len(text) > max_len:
+                                text = text[:max_len]
+
+                            f_lang = build_localized_fieldname(field, lang)
+                            setattr(obj, f_lang, text)
+                            updated = True
+                            total += 1
+
+                        time.sleep(2.5)
 
                     except Exception as e:
-                        self.stdout.write(self.style.ERROR(f'Error translating {field} for {model_name} ID {obj.id}: {e}'))
+                        self.stdout.write(
+                            self.style.ERROR(
+                                f'Error {ModelClass.__name__} ID {obj.id} field {field}: {e}'
+                            )
+                        )
                         time.sleep(5)
 
-                if obj_updated:
+                if updated:
                     obj.save()
 
-        self.stdout.write(self.style.SUCCESS(f'Translation complete! Total fields translated: {total_translated_count}'))
+        self.stdout.write(self.style.SUCCESS(f'DONE ✅ Total translated fields: {total}'))
