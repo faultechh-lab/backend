@@ -149,7 +149,7 @@ class FaultCodes(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name='fault_codes')
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, null=True, blank=True, related_name='fault_codes')
     model = models.ForeignKey(Model, on_delete=models.CASCADE, null=True, blank=True, related_name='fault_codes')
-    code = models.CharField(max_length=100,verbose_name='Arıza Kodu')
+    code = models.CharField(max_length=250,verbose_name='Arıza Kodu')
     fault_description = models.TextField(verbose_name='Arıza Tanımı')
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
     image = models.ImageField(upload_to='fault_codes_images/',blank=True,null=True,verbose_name='Arıza Kodu Resmi')
