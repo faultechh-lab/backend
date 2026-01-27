@@ -96,7 +96,10 @@ class Command(BaseCommand):
                                 f"Text: {source_text}"
                             )
                             
-                            response = model.generate_content(prompt)
+                            response = client.models.generate_content(
+                                model='gemini-2.0-flash',
+                                contents=prompt
+                            )
                             
                             if response.text:
                                 translated_text = response.text.strip()

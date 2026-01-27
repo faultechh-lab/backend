@@ -25,10 +25,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('GEMINI_API_KEY not found in .env file.'))
             return
 
-        genai.configure(api_key=api_key)
-        # Using gemini-2.5-flash for speed and cost efficiency
-        #model = genai.GenerativeModel('gemini-2.5-flash')
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        # Using gemini-2.0-flash
+        client = genai.Client(api_key=api_key)
 
         # Target languages mapping (code -> name)
         # Source is always 'tr'
@@ -70,16 +68,25 @@ class Command(BaseCommand):
             self.stdout.write(self.style.MIGRATE_HEADING(f'Processing model: {model_name}'))
             
             # Build filter for objects that have at least one missing translation
+            # AND have valid source text
             query = Q()
             for field in fields:
+                field_tr = build_localized_fieldname(field, 'tr')
+                
+                # Source condition: Must have content in TR
+                source_present = Q(**{f"{field_tr}__isnull": False}) & ~Q(**{f"{field_tr}": ""})
+
+                # Target condition: At least one target is missing
+                target_missing = Q()
                 for lang_code in TARGET_LANGUAGES.keys():
                     field_lang = build_localized_fieldname(field, lang_code)
-                    # Check for None or Empty string
-                    query |= Q(**{f"{field_lang}__isnull": True}) | Q(**{f"{field_lang}": ""})
+                    target_missing |= Q(**{f"{field_lang}__isnull": True}) | Q(**{f"{field_lang}": ""})
+                
+                query |= (source_present & target_missing)
             
             objects = ModelClass.objects.filter(query).distinct()
             count = objects.count()
-            self.stdout.write(f'Found {count} objects in {model_name} needing translation.')
+            self.stdout.write(f'Found {count} objects in {model_name} needing translation (with valid source text).')
 
             for obj in objects:
                 obj_updated = False
