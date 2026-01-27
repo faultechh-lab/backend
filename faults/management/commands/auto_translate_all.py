@@ -146,7 +146,11 @@ class Command(BaseCommand):
                             f"Text to translate: {source_text}"
                         )
 
-                        response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+                        response = client.models.generate_content(
+                            model='gemini-2.0-flash',
+                            contents=prompt,
+                            config=types.GenerateContentConfig(response_mime_type="application/json")
+                        )
                         
                         if response.text:
                             try:

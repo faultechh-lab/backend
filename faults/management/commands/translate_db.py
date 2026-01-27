@@ -23,9 +23,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('GEMINI_API_KEY not found in .env file.'))
             return
 
-        genai.configure(api_key=api_key)
-        # Using gemini-2.5-flash as requested
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        client = genai.Client(api_key=api_key)
 
         # List of models and their fields to translate
         # (ModelClass, [list of fields])

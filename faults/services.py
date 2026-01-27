@@ -1,12 +1,17 @@
 import os
 import json
 import time
-import google.generativeai as genai
+import logging
+from google import genai
+from google.genai import types
 from decouple import config
 from django.db import transaction
 from django.core.files.base import ContentFile
 from modeltranslation.translator import translator
 from modeltranslation.utils import build_localized_fieldname
+
+logger = logging.getLogger(__name__)
+
 from .models import (
     Model as BoilerModel,
     Brand,
