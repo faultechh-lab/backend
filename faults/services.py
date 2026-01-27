@@ -1,6 +1,12 @@
 import os
+import json
+import time
+import google.generativeai as genai
+from decouple import config
 from django.db import transaction
 from django.core.files.base import ContentFile
+from modeltranslation.translator import translator
+from modeltranslation.utils import build_localized_fieldname
 from .models import (
     Model as BoilerModel,
     Brand,
@@ -15,7 +21,148 @@ from .models import (
     Video,
     RoomTermostat,
     RoomTermostatImage,
+    Category,
+    BoilerRepairGuide,
+    SparePartsDefinitions,
+    BoilerWorkingPrinciple,
+    BoilerBoardRepairer,
+    InstrumentUsage
 )
+
+def translate_model_instance(instance):
+    """
+    Translates a model instance using Gemini API if it's registered for translation.
+    Intended to be called from a pre_save signal.
+    """
+    # Check if model is registered for translation
+    try:
+        options = translator.get_options_for_model(instance.__class__)
+    except:
+        return # Not a translated model
+
+    if not options:
+        return
+
+    # Setup Gemini
+    api_key = config('GEMINI_API_KEY', default=None)
+    if not api_key:
+        return
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+    except Exception:
+        return
+
+    TARGET_LANGUAGES = {
+        'en': 'English',
+        'de': 'German',
+        'fr': 'French',
+        'ru': 'Russian',
+        'es': 'Spanish',
+        'it': 'Italian',
+        'ar': 'Arabic',
+    }
+
+    # Fetch old instance to check for changes
+    old_instance = None
+    if instance.pk:
+        try:
+            old_instance = instance.__class__.objects.get(pk=instance.pk)
+        except instance.__class__.DoesNotExist:
+            pass
+
+    for field_name in options.fields:
+        # Source field (TR)
+        field_tr = build_localized_fieldname(field_name, 'tr')
+        
+        # Get current value (check both field_tr and field_name)
+        new_val = getattr(instance, field_tr, None)
+        if not new_val:
+            new_val = getattr(instance, field_name, None)
+
+        # Skip if empty or too short
+        if not new_val or (isinstance(new_val, str) and len(new_val.strip()) < 2 and field_name != 'code'):
+            continue
+            
+        # Determine languages to translate
+        langs_to_translate = []
+        
+        is_changed = False
+        if not old_instance:
+            is_changed = True
+        else:
+            old_val = getattr(old_instance, field_tr, None)
+            if not old_val:
+                old_val = getattr(old_instance, field_name, None)
+            
+            if new_val != old_val:
+                is_changed = True
+
+        if is_changed:
+            # If changed, translate to ALL languages
+            langs_to_translate = list(TARGET_LANGUAGES.keys())
+        else:
+            # If not changed, only fill missing languages
+            for lang in TARGET_LANGUAGES.keys():
+                f_lang = build_localized_fieldname(field_name, lang)
+                val = getattr(instance, f_lang, None)
+                if not val or (isinstance(val, str) and not val.strip()):
+                    langs_to_translate.append(lang)
+        
+        if not langs_to_translate:
+            continue
+
+        try:
+            # Construct the prompt
+            target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
+            
+            # Max length check logic
+            max_len_instruction = ""
+            simplify_instruction = "Do not simplify or shorten.\n"
+            
+            model_field = instance._meta.get_field(field_name)
+            if hasattr(model_field, 'max_length') and model_field.max_length:
+                max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
+                simplify_instruction = ""
+
+            prompt = (
+                "You are a professional technical translator.\n"
+                f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
+                f"{max_len_instruction}"
+                "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
+                f"{simplify_instruction}"
+                "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
+                "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
+                "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
+                f"Text to translate: {new_val}"
+            )
+
+            response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+            
+            if response.text:
+                translations = json.loads(response.text)
+                
+                for lang_code, translated_text in translations.items():
+                    if lang_code in langs_to_translate and translated_text:
+                        if isinstance(translated_text, str):
+                            translated_text = translated_text.strip()
+                        
+                        # Apply max_length truncation as safety net
+                        if hasattr(model_field, 'max_length') and model_field.max_length:
+                             if len(translated_text) > model_field.max_length:
+                                 translated_text = translated_text[:model_field.max_length]
+
+                        f_lang = build_localized_fieldname(field_name, lang_code)
+                        setattr(instance, f_lang, translated_text)
+            
+            # Small sleep to avoid instant rate limit if multiple fields
+            time.sleep(1) 
+
+        except Exception as e:
+            # Silently fail or log, don't block save
+            print(f"Translation error for {field_name}: {e}")
+            pass
 
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None) -> BoilerModel:
