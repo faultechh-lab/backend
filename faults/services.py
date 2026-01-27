@@ -137,7 +137,11 @@ def translate_model_instance(instance):
                 f"Text to translate: {new_val}"
             )
 
-            response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
             
             if response.text:
                 translations = json.loads(response.text)
@@ -160,7 +164,7 @@ def translate_model_instance(instance):
 
         except Exception as e:
             # Silently fail or log, don't block save
-            print(f"Translation error for {field_name}: {e}")
+            print(f"DEBUG: Translation error for {field_name}: {e}")
             pass
 
 @transaction.atomic
