@@ -138,7 +138,10 @@ def translate_model_instance(instance):
                 f"Text to translate: {new_val}"
             )
 
-            response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(response_mime_type="application/json")
+            )
             
             if response.text:
                 translations = json.loads(response.text)
