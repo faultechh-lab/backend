@@ -27,7 +27,8 @@ class Command(BaseCommand):
 
         genai.configure(api_key=api_key)
         # Using gemini-2.5-flash for speed and cost efficiency
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        #model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
         # Target languages mapping (code -> name)
         # Source is always 'tr'
