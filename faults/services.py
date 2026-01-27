@@ -46,11 +46,13 @@ def translate_model_instance(instance):
     # Setup Gemini
     api_key = config('GEMINI_API_KEY', default=None)
     if not api_key:
+        logger.warning("GEMINI_API_KEY not found in env, skipping translation.")
         return
 
     try:
         client = genai.Client(api_key=api_key)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
         return
 
     TARGET_LANGUAGES = {
