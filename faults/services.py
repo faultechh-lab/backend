@@ -34,6 +34,9 @@ def translate_model_instance(instance):
     Translates a model instance using Gemini API if it's registered for translation.
     Intended to be called from a pre_save signal.
     """
+    # ACIL DURUM: Sunucu cokmelerini onlemek icin simdilik devre disi birakildi.
+    return
+
     # Check if model is registered for translation
     try:
         options = translator.get_options_for_model(instance.__class__)
