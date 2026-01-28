@@ -56,7 +56,11 @@ def translate_model_instance(instance):
         return
 
     try:
-        client = genai.Client(api_key=api_key)
+        # Client-level timeout (15 seconds = 15000ms)
+        client = genai.Client(
+            api_key=api_key,
+            http_options={'timeout': 15000}
+        )
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
         return
@@ -79,6 +83,9 @@ def translate_model_instance(instance):
         except instance.__class__.DoesNotExist:
             pass
 
+    # Collect all fields that need translation
+    fields_to_translate = {}
+    
     for field_name in options.fields:
         # Source field (TR)
         field_tr = build_localized_fieldname(field_name, 'tr')
@@ -117,63 +124,71 @@ def translate_model_instance(instance):
                 if not val or (isinstance(val, str) and not val.strip()):
                     langs_to_translate.append(lang)
         
-        if not langs_to_translate:
-            continue
+        if langs_to_translate:
+            fields_to_translate[field_name] = {
+                'value': new_val,
+                'langs': langs_to_translate,
+                'field_obj': instance._meta.get_field(field_name)
+            }
 
-        try:
-            # Construct the prompt
-            target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
-            
-            # Max length check logic
-            max_len_instruction = ""
-            simplify_instruction = "Do not simplify or shorten.\n"
-            
-            model_field = instance._meta.get_field(field_name)
-            if hasattr(model_field, 'max_length') and model_field.max_length:
-                max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
-                simplify_instruction = ""
+    if not fields_to_translate:
+        return
 
-            prompt = (
-                "You are a professional technical translator.\n"
-                f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
-                f"{max_len_instruction}"
-                "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
-                f"{simplify_instruction}"
-                "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
-                "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
-                "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
-                f"Text to translate: {new_val}"
+    try:
+        # Construct Batch Prompt
+        batch_data = []
+        for field_name, info in fields_to_translate.items():
+            max_len = getattr(info['field_obj'], 'max_length', None)
+            batch_data.append({
+                "id": field_name,
+                "text": info['value'],
+                "targets": info['langs'],
+                "max_chars": max_len
+            })
+
+        prompt = (
+            "You are a professional technical translator for HVAC/Boiler systems.\n"
+            "Translate each 'text' in the provided JSON array into its specific 'targets' languages.\n"
+            "Rules:\n"
+            "1. RETURN ONLY VALID JSON.\n"
+            "2. Preserve HTML, units, and technical terms exactly.\n"
+            "3. Respect 'max_chars' if specified (summarize if needed).\n"
+            "4. Format response as: { \"field_id\": { \"lang_code\": \"translation\", ... }, ... }\n"
+            f"Data to translate: {json.dumps(batch_data, ensure_ascii=False)}"
+        )
+
+        # Generate content
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
             )
-
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
+        )
+        
+        if response.text:
+            all_translations = json.loads(response.text)
             
-            if response.text:
-                translations = json.loads(response.text)
-                
-                for lang_code, translated_text in translations.items():
-                    if lang_code in langs_to_translate and translated_text:
-                        if isinstance(translated_text, str):
-                            translated_text = translated_text.strip()
-                        
-                        # Apply max_length truncation as safety net
-                        if hasattr(model_field, 'max_length') and model_field.max_length:
-                             if len(translated_text) > model_field.max_length:
-                                 translated_text = translated_text[:model_field.max_length]
+            for field_name, translations in all_translations.items():
+                if field_name in fields_to_translate:
+                    model_field = fields_to_translate[field_name]['field_obj']
+                    for lang_code, translated_text in translations.items():
+                        if lang_code in fields_to_translate[field_name]['langs'] and translated_text:
+                            if isinstance(translated_text, str):
+                                translated_text = translated_text.strip()
+                            
+                            # Safety net truncation
+                            if hasattr(model_field, 'max_length') and model_field.max_length:
+                                 if len(translated_text) > model_field.max_length:
+                                     translated_text = translated_text[:model_field.max_length]
 
-                        f_lang = build_localized_fieldname(field_name, lang_code)
-                        setattr(instance, f_lang, translated_text)
-            
-            # Small sleep to avoid instant rate limit if multiple fields
-            time.sleep(1) 
+                            f_lang = build_localized_fieldname(field_name, lang_code)
+                            setattr(instance, f_lang, translated_text)
 
-        except Exception as e:
-            # Silently fail or log, don't block save
-            print(f"DEBUG: Translation error for {field_name}: {e}")
-            pass
+    except Exception as e:
+        logger.error(f"Translation batch error: {e}")
+        # Silently fail for individual instance save to proceed
+        pass
 
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
