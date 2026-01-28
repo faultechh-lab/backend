@@ -200,6 +200,62 @@ def translate_model_instance(instance):
         logger.warning(f"Translation error for {instance.__class__.__name__}: {e}")
         print(f"DEBUG: Translation error: {e}")
 
+
+def translate_model_instance_async(instance):
+    """
+    Arka plan thread'inde çalışacak çeviri fonksiyonu.
+    Instance'ı veritabanından yeniden yükler, çeviriyi yapar ve sinyalleri 
+    devre dışı bırakarak kaydeder (sonsuz döngüyü önlemek için).
+    """
+    import django
+    django.setup()
+    
+    from django.db import connection
+    from django.db.models.signals import post_save
+    from .signals import auto_translate_handler
+    
+    try:
+        # Veritabanı bağlantısını kapat ve yeniden aç (thread için gerekli)
+        connection.close()
+        
+        # Instance'ı yeniden yükle
+        model_class = instance.__class__
+        pk = instance.pk
+        
+        if not pk:
+            logger.warning(f"Cannot translate {model_class.__name__}: no pk")
+            return
+            
+        try:
+            fresh_instance = model_class.objects.get(pk=pk)
+        except model_class.DoesNotExist:
+            logger.warning(f"Cannot translate {model_class.__name__} pk={pk}: not found")
+            return
+        
+        # Çeviriyi yap
+        translate_model_instance(fresh_instance)
+        
+        # Sinyali geçici olarak devre dışı bırak (sonsuz döngüyü önle)
+        try:
+            post_save.disconnect(auto_translate_handler)
+        except Exception:
+            pass
+        
+        try:
+            # Kaydet
+            fresh_instance.save()
+            logger.info(f"Translation completed for {model_class.__name__} pk={pk}")
+        finally:
+            # Sinyali tekrar bağla
+            try:
+                post_save.connect(auto_translate_handler)
+            except Exception:
+                pass
+                
+    except Exception as e:
+        logger.error(f"Async translation error for {instance.__class__.__name__}: {e}")
+        print(f"DEBUG: Async translation error: {e}")
+
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
     """
