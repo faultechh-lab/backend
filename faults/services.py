@@ -56,10 +56,11 @@ def translate_model_instance(instance):
         return
 
     try:
-        # Client-level timeout (60 seconds = 60000ms)
+        # Client-level timeout (25 seconds = 25000ms)
+        # We set it to 25s so it fails BEFORE Gunicorn kills the worker (default 30s)
         client = genai.Client(
             api_key=api_key,
-            http_options={'timeout': 60000}
+            http_options={'timeout': 25000}
         )
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
@@ -152,8 +153,8 @@ def translate_model_instance(instance):
             "Rules:\n"
             "1. RETURN ONLY VALID JSON.\n"
             "2. Preserve HTML, units, and technical terms exactly.\n"
-            "3. Respect 'max_chars' if specified (summarize if needed).\n"
-            "4. Format response as: { \"field_id\": { \"lang_code\": \"translation\", ... }, ... }\n"
+            "3. Respect 'max_chars' if specified.\n"
+            "4. Format response EXACTLY as a JSON object: { \"field_id\": { \"lang_code\": \"translation\", ... }, ... }\n"
             f"Data to translate: {json.dumps(batch_data, ensure_ascii=False)}"
         )
 
@@ -167,27 +168,48 @@ def translate_model_instance(instance):
         )
         
         if response.text:
-            all_translations = json.loads(response.text)
+            cleaned_json = response.text.strip()
+            # If the model returns a markdown code block, remove it
+            if cleaned_json.startswith("```json"):
+                cleaned_json = cleaned_json.replace("```json", "").replace("```", "").strip()
             
-            for field_name, translations in all_translations.items():
-                if field_name in fields_to_translate:
-                    model_field = fields_to_translate[field_name]['field_obj']
-                    for lang_code, translated_text in translations.items():
-                        if lang_code in fields_to_translate[field_name]['langs'] and translated_text:
-                            if isinstance(translated_text, str):
-                                translated_text = translated_text.strip()
-                            
-                            # Safety net truncation
-                            if hasattr(model_field, 'max_length') and model_field.max_length:
-                                 if len(translated_text) > model_field.max_length:
-                                     translated_text = translated_text[:model_field.max_length]
+            all_translations = json.loads(cleaned_json)
+            
+            # Robustness: Handle if model returns a list instead of dict
+            if isinstance(all_translations, list):
+                # Attempt to convert list of objects to dict if possible
+                new_dict = {}
+                for item in all_translations:
+                    if isinstance(item, dict) and 'id' in item:
+                        # Convert {id: field, en: trans} format to {field: {en: trans}}
+                        field_id = item.pop('id')
+                        new_dict[field_id] = item
+                all_translations = new_dict
 
-                            f_lang = build_localized_fieldname(field_name, lang_code)
-                            setattr(instance, f_lang, translated_text)
+            if isinstance(all_translations, dict):
+                for field_name, translations in all_translations.items():
+                    if field_name in fields_to_translate:
+                        model_field = fields_to_translate[field_name]['field_obj']
+                        for lang_code, translated_text in translations.items():
+                            if lang_code in fields_to_translate[field_name]['langs'] and translated_text:
+                                if isinstance(translated_text, str):
+                                    translated_text = translated_text.strip()
+                                
+                                # Safety net truncation
+                                if hasattr(model_field, 'max_length') and model_field.max_length:
+                                     if len(translated_text) > model_field.max_length:
+                                         translated_text = translated_text[:model_field.max_length]
+
+                                f_lang = build_localized_fieldname(field_name, lang_code)
+                                setattr(instance, f_lang, translated_text)
 
     except Exception as e:
-        logger.error(f"Translation batch error: {e}")
-        # Silently fail for individual instance save to proceed
+        if "429" in str(e):
+             logger.warning(f"Translation rate limit hit (429) for instance {instance.pk}: {e}")
+        elif "504" in str(e) or "Deadline" in str(e):
+             logger.warning(f"Translation timeout (Gemini) for instance {instance.pk}: {e}")
+        else:
+             logger.error(f"Translation batch error: {e}")
         pass
 
 @transaction.atomic
