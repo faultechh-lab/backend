@@ -190,8 +190,8 @@ class Command(BaseCommand):
                         if obj_updated:
                             obj.save()
 
-                    # Small delay to avoid rate limits in bulk
-                    time.sleep(1.0)
+                    # Sleep 5 seconds between objects to stay within 15 RPM (free tier) quota
+                    time.sleep(5.0)
 
                 except Exception as e:
                     if "429" in str(e):
