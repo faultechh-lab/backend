@@ -6,6 +6,7 @@ from google import genai
 from google.genai import types
 from decouple import config
 from django.db import transaction
+from django.db.models.signals import pre_save
 from django.core.files.base import ContentFile
 from modeltranslation.translator import translator
 from modeltranslation.utils import build_localized_fieldname
@@ -175,12 +176,23 @@ def translate_model_instance(instance):
             pass
 
 @transaction.atomic
-def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None) -> BoilerModel:
+def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
     """
     Clone a Model and its children (FaultCodes with SparePartImage, Parameters with ParameterImage)
     - name_suffix: appended to the model name
     - make_inactive: set new model active field to False if True
+    - _signals_disconnected: internal flag to prevent redundant signal disconnection
     """
+    # Import here to avoid circular import
+    from .signals import auto_translate_handler, TRANSLATABLE_MODELS
+    
+    # Disconnect translation signal to prevent timeouts during bulk copy
+    should_disconnect = not _signals_disconnected
+    if should_disconnect:
+        try:
+            pre_save.disconnect(auto_translate_handler)
+        except Exception:
+            pass
     # Prepare base fields for model clone
     model_fields = {
         "name": f"{getattr(source, 'name', '')}{name_suffix}",
@@ -407,11 +419,27 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
             img = ContentFile(rti.image.read(), name=os.path.basename(rti.image.name)) if rti.image else None
             RoomTermostatImage.objects.create(room_thermostat=new_rt, image=img, active=rti.active)
 
+    # Reconnect translation signal if we disconnected it
+    if should_disconnect:
+        try:
+            pre_save.connect(auto_translate_handler)
+        except Exception:
+            pass
+
     return new_model
 
 
 @transaction.atomic
 def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", make_inactive: bool = False) -> Brand:
+    # Import here to avoid circular import
+    from .signals import auto_translate_handler, TRANSLATABLE_MODELS
+    
+    # Disconnect translation signal to prevent timeouts during bulk copy
+    try:
+        pre_save.disconnect(auto_translate_handler)
+    except Exception:
+        pass
+    
     brand_fields = {
         "name": f"{getattr(source, 'name', '')}{name_suffix}",
         "category": source.category,
@@ -432,6 +460,12 @@ def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", m
 
     src_models = list(BoilerModel.objects.filter(brand=source))
     for m in src_models:
-        clone_model_with_children(m, name_suffix=name_suffix, make_inactive=make_inactive, override_brand=new_brand)
+        clone_model_with_children(m, name_suffix=name_suffix, make_inactive=make_inactive, override_brand=new_brand, _signals_disconnected=True)
+
+    # Reconnect translation signal
+    try:
+        pre_save.connect(auto_translate_handler)
+    except Exception:
+        pass
 
     return new_brand
