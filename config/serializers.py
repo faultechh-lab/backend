@@ -241,6 +241,8 @@ class OrderNotificationSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
     company = serializers.CharField(source='user.company', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_phone = serializers.CharField(source='user.phone_number', read_only=True)
     product_title = serializers.CharField(source='product.title', read_only=True)
     product_price = serializers.DecimalField(source='product.price', read_only=True,max_digits=10, decimal_places=2)
     product_discount_price = serializers.DecimalField(source='product.discount_price', read_only=True,max_digits=10, decimal_places=2)
