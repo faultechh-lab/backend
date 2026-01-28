@@ -176,10 +176,14 @@ def translate_model_instance(instance):
             pass
 
 
-def translate_model_instance_async(instance):
+def translate_model_instance_async(instance, changed_fields=None):
     """
     Arka plan thread'inden çağrılmak üzere tasarlanmış çeviri fonksiyonu.
     Model zaten kaydedilmiş olduğundan, çevirileri doğrudan veritabanına yazar.
+    
+    Args:
+        instance: Çevrilecek model instance'ı
+        changed_fields: Değişen alan isimleri listesi veya '__all__' (yeni kayıt için)
     """
     from django.db import connection
     
@@ -235,13 +239,23 @@ def translate_model_instance_async(instance):
         if not new_val or (isinstance(new_val, str) and len(new_val.strip()) < 2 and field_name != 'code'):
             continue
         
-        # Eksik dilleri bul
+        # Hangi dillere çeviri yapılacağını belirle
         langs_to_translate = []
-        for lang in TARGET_LANGUAGES.keys():
-            f_lang = build_localized_fieldname(field_name, lang)
-            val = getattr(db_instance, f_lang, None)
-            if not val or (isinstance(val, str) and not val.strip()):
-                langs_to_translate.append(lang)
+        
+        # Bu alan değiştiyse tüm dilleri çevir
+        is_field_changed = (changed_fields == '__all__' or 
+                           (isinstance(changed_fields, list) and field_name in changed_fields))
+        
+        if is_field_changed:
+            # Değişen alan - tüm dillere çevir
+            langs_to_translate = list(TARGET_LANGUAGES.keys())
+        else:
+            # Değişmeyen alan - sadece boş dilleri doldur
+            for lang in TARGET_LANGUAGES.keys():
+                f_lang = build_localized_fieldname(field_name, lang)
+                val = getattr(db_instance, f_lang, None)
+                if not val or (isinstance(val, str) and not val.strip()):
+                    langs_to_translate.append(lang)
         
         if not langs_to_translate:
             continue
