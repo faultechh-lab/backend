@@ -39,7 +39,6 @@ def translate_model_instance(instance):
     """
     Translates a model instance using Gemini API if it's registered for translation.
     Intended to be called from a pre_save signal.
-    Basitleştirilmiş mantık: Her kayıtta Türkçe alanı alınır ve tüm dillere sıfırdan çeviri yapılır.
     """
     # Check if model is registered for translation
     try:
@@ -57,9 +56,7 @@ def translate_model_instance(instance):
         return
 
     try:
-        # 20 saniyelik HTTP timeout ekle - Gunicorn worker timeout'undan önce bitmesi için
-        http_options = types.HttpOptions(timeout=20)
-        client = genai.Client(api_key=api_key, http_options=http_options)
+        client = genai.Client(api_key=api_key)
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
         return
@@ -74,6 +71,14 @@ def translate_model_instance(instance):
         'ar': 'Arabic',
     }
 
+    # Fetch old instance to check for changes
+    old_instance = None
+    if instance.pk:
+        try:
+            old_instance = instance.__class__.objects.get(pk=instance.pk)
+        except instance.__class__.DoesNotExist:
+            pass
+
     for field_name in options.fields:
         # Source field (TR)
         field_tr = build_localized_fieldname(field_name, 'tr')
@@ -86,9 +91,34 @@ def translate_model_instance(instance):
         # Skip if empty or too short
         if not new_val or (isinstance(new_val, str) and len(new_val.strip()) < 2 and field_name != 'code'):
             continue
+            
+        # Determine languages to translate
+        langs_to_translate = []
         
-        # Basitleştirilmiş: Her zaman tüm dillere çeviri yap
-        langs_to_translate = list(TARGET_LANGUAGES.keys())
+        is_changed = False
+        if not old_instance:
+            is_changed = True
+        else:
+            old_val = getattr(old_instance, field_tr, None)
+            if not old_val:
+                old_val = getattr(old_instance, field_name, None)
+            
+            if new_val != old_val:
+                is_changed = True
+
+        if is_changed:
+            # If changed, translate to ALL languages
+            langs_to_translate = list(TARGET_LANGUAGES.keys())
+        else:
+            # If not changed, only fill missing languages
+            for lang in TARGET_LANGUAGES.keys():
+                f_lang = build_localized_fieldname(field_name, lang)
+                val = getattr(instance, f_lang, None)
+                if not val or (isinstance(val, str) and not val.strip()):
+                    langs_to_translate.append(lang)
+        
+        if not langs_to_translate:
+            continue
 
         try:
             # Construct the prompt
@@ -136,12 +166,14 @@ def translate_model_instance(instance):
 
                         f_lang = build_localized_fieldname(field_name, lang_code)
                         setattr(instance, f_lang, translated_text)
+            
+            # Small sleep to avoid instant rate limit if multiple fields
+            time.sleep(1) 
 
         except Exception as e:
             # Silently fail or log, don't block save
-            logger.warning(f"Translation error for {field_name}: {e}")
+            print(f"DEBUG: Translation error for {field_name}: {e}")
             pass
-
 
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
