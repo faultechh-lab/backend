@@ -39,26 +39,26 @@ def translate_model_instance(instance):
     """
     Translates a model instance using Gemini API if it's registered for translation.
     Intended to be called from a pre_save signal.
-    Uses batching to send all fields in a single API call with timeout protection.
+    Basitleştirilmiş mantık: Her kayıtta Türkçe alanı alınır ve tüm dillere sıfırdan çeviri yapılır.
     """
     # Check if model is registered for translation
     try:
         options = translator.get_options_for_model(instance.__class__)
-    except Exception:
-        return  # Not a translated model
+    except:
+        return # Not a translated model
 
     if not options:
         return
 
-    # Setup Gemini with HTTP timeout
+    # Setup Gemini
     api_key = config('GEMINI_API_KEY', default=None)
     if not api_key:
         logger.warning("GEMINI_API_KEY not found in env, skipping translation.")
         return
 
     try:
-        # Create client with 20 second timeout to prevent Gunicorn worker kills
-        http_options = types.HttpOptions(timeout=20000)  # 20 seconds in ms
+        # 20 saniyelik HTTP timeout ekle - Gunicorn worker timeout'undan önce bitmesi için
+        http_options = types.HttpOptions(timeout=20)
         client = genai.Client(api_key=api_key, http_options=http_options)
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
@@ -74,17 +74,6 @@ def translate_model_instance(instance):
         'ar': 'Arabic',
     }
 
-    # Fetch old instance to check for changes
-    old_instance = None
-    if instance.pk:
-        try:
-            old_instance = instance.__class__.objects.get(pk=instance.pk)
-        except instance.__class__.DoesNotExist:
-            pass
-
-    # Collect all fields that need translation (batching)
-    fields_to_translate = {}  # {field_name: {'value': str, 'langs': list, 'max_length': int|None}}
-    
     for field_name in options.fields:
         # Source field (TR)
         field_tr = build_localized_fieldname(field_name, 'tr')
@@ -97,164 +86,62 @@ def translate_model_instance(instance):
         # Skip if empty or too short
         if not new_val or (isinstance(new_val, str) and len(new_val.strip()) < 2 and field_name != 'code'):
             continue
-            
-        # Determine languages to translate
-        langs_to_translate = []
         
-        is_changed = False
-        if not old_instance:
-            is_changed = True
-        else:
-            old_val = getattr(old_instance, field_tr, None)
-            if not old_val:
-                old_val = getattr(old_instance, field_name, None)
-            
-            if new_val != old_val:
-                is_changed = True
+        # Basitleştirilmiş: Her zaman tüm dillere çeviri yap
+        langs_to_translate = list(TARGET_LANGUAGES.keys())
 
-        if is_changed:
-            # If changed, translate to ALL languages
-            langs_to_translate = list(TARGET_LANGUAGES.keys())
-        else:
-            # If not changed, only fill missing languages
-            for lang in TARGET_LANGUAGES.keys():
-                f_lang = build_localized_fieldname(field_name, lang)
-                val = getattr(instance, f_lang, None)
-                if not val or (isinstance(val, str) and not val.strip()):
-                    langs_to_translate.append(lang)
-        
-        if langs_to_translate:
+        try:
+            # Construct the prompt
+            target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
+            
+            # Max length check logic
+            max_len_instruction = ""
+            simplify_instruction = "Do not simplify or shorten.\n"
+            
             model_field = instance._meta.get_field(field_name)
-            max_length = getattr(model_field, 'max_length', None)
-            fields_to_translate[field_name] = {
-                'value': new_val,
-                'langs': langs_to_translate,
-                'max_length': max_length
-            }
+            if hasattr(model_field, 'max_length') and model_field.max_length:
+                max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
+                simplify_instruction = ""
 
-    # If no fields need translation, return early
-    if not fields_to_translate:
-        return
+            prompt = (
+                "You are a professional technical translator.\n"
+                f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
+                f"{max_len_instruction}"
+                "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
+                f"{simplify_instruction}"
+                "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
+                "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
+                "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
+                f"Text to translate: {new_val}"
+            )
 
-    # Build a single batched prompt for all fields
-    try:
-        all_langs = set()
-        for field_info in fields_to_translate.values():
-            all_langs.update(field_info['langs'])
-        
-        target_list_str = ", ".join(sorted(all_langs))
-        
-        # Build fields description for prompt
-        fields_desc = []
-        for field_name, info in fields_to_translate.items():
-            max_len_note = f" (max {info['max_length']} chars)" if info['max_length'] else ""
-            fields_desc.append(f'"{field_name}"{max_len_note}: "{info["value"]}"')
-        
-        fields_json_str = "{\n  " + ",\n  ".join(fields_desc) + "\n}"
-
-        prompt = (
-            "You are a professional technical translator.\n"
-            f"Translate the following fields from Turkish to these languages: {target_list_str}.\n"
-            "IMPORTANT: If a max character limit is specified for a field, each translation for that field MUST be shorter than the limit. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
-            "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
-            "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
-            "Return ONLY a valid JSON object where the structure is: {\"field_name\": {\"lang_code\": \"translation\", ...}, ...}\n"
-            f"Fields to translate:\n{fields_json_str}"
-        )
-
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json")
-        )
-        
-        if response.text:
-            translations = json.loads(response.text)
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
             
-            for field_name, lang_translations in translations.items():
-                if field_name not in fields_to_translate:
-                    continue
-                    
-                field_info = fields_to_translate[field_name]
-                max_length = field_info['max_length']
+            if response.text:
+                translations = json.loads(response.text)
                 
-                if not isinstance(lang_translations, dict):
-                    continue
-                    
-                for lang_code, translated_text in lang_translations.items():
-                    if lang_code not in field_info['langs'] or not translated_text:
-                        continue
+                for lang_code, translated_text in translations.items():
+                    if lang_code in langs_to_translate and translated_text:
+                        if isinstance(translated_text, str):
+                            translated_text = translated_text.strip()
                         
-                    if isinstance(translated_text, str):
-                        translated_text = translated_text.strip()
-                    
-                    # Apply max_length truncation as safety net
-                    if max_length and len(translated_text) > max_length:
-                        translated_text = translated_text[:max_length]
+                        # Apply max_length truncation as safety net
+                        if hasattr(model_field, 'max_length') and model_field.max_length:
+                             if len(translated_text) > model_field.max_length:
+                                 translated_text = translated_text[:model_field.max_length]
 
-                    f_lang = build_localized_fieldname(field_name, lang_code)
-                    setattr(instance, f_lang, translated_text)
+                        f_lang = build_localized_fieldname(field_name, lang_code)
+                        setattr(instance, f_lang, translated_text)
 
-    except Exception as e:
-        # Log error but don't block save - translation is not critical
-        logger.warning(f"Translation error for {instance.__class__.__name__}: {e}")
-        print(f"DEBUG: Translation error: {e}")
-
-
-def translate_model_instance_async(instance):
-    """
-    Arka plan thread'inde çalışacak çeviri fonksiyonu.
-    Instance'ı veritabanından yeniden yükler, çeviriyi yapar ve sinyalleri 
-    devre dışı bırakarak kaydeder (sonsuz döngüyü önlemek için).
-    """
-    import django
-    django.setup()
-    
-    from django.db import connection
-    from django.db.models.signals import post_save
-    from .signals import auto_translate_handler
-    
-    try:
-        # Veritabanı bağlantısını kapat ve yeniden aç (thread için gerekli)
-        connection.close()
-        
-        # Instance'ı yeniden yükle
-        model_class = instance.__class__
-        pk = instance.pk
-        
-        if not pk:
-            logger.warning(f"Cannot translate {model_class.__name__}: no pk")
-            return
-            
-        try:
-            fresh_instance = model_class.objects.get(pk=pk)
-        except model_class.DoesNotExist:
-            logger.warning(f"Cannot translate {model_class.__name__} pk={pk}: not found")
-            return
-        
-        # Çeviriyi yap
-        translate_model_instance(fresh_instance)
-        
-        # Sinyali geçici olarak devre dışı bırak (sonsuz döngüyü önle)
-        try:
-            post_save.disconnect(auto_translate_handler)
-        except Exception:
+        except Exception as e:
+            # Silently fail or log, don't block save
+            logger.warning(f"Translation error for {field_name}: {e}")
             pass
-        
-        try:
-            # Kaydet
-            fresh_instance.save()
-            logger.info(f"Translation completed for {model_class.__name__} pk={pk}")
-        finally:
-            # Sinyali tekrar bağla
-            try:
-                post_save.connect(auto_translate_handler)
-            except Exception:
-                pass
-                
-    except Exception as e:
-        logger.error(f"Async translation error for {instance.__class__.__name__}: {e}")
-        print(f"DEBUG: Async translation error: {e}")
+
 
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
