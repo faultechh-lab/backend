@@ -56,10 +56,10 @@ def translate_model_instance(instance):
         return
 
     try:
-        # Client-level timeout (15 seconds = 15000ms)
+        # Client-level timeout (60 seconds = 60000ms)
         client = genai.Client(
             api_key=api_key,
-            http_options={'timeout': 15000}
+            http_options={'timeout': 60000}
         )
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
