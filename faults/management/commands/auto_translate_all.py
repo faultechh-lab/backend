@@ -142,7 +142,7 @@ class Command(BaseCommand):
                         "1. RETURN ONLY VALID JSON.\n"
                         "2. Preserve HTML, units, and technical terms exactly.\n"
                         "3. Respect 'max_chars' if specified.\n"
-                        "4. Format response EXACTLY as a JSON object: { \"field_id\": { \"lang_code\": \"translation\", ... }, ... }\n"
+                        "4. Format response as: { \"field_id\": { \"lang_code\": \"translation\", ... }, ... }\n"
                         f"Data to translate: {json.dumps(batch_data, ensure_ascii=False)}"
                     )
 
@@ -153,52 +153,34 @@ class Command(BaseCommand):
                     )
 
                     if response.text:
-                        cleaned_json = response.text.strip()
-                        if cleaned_json.startswith("```json"):
-                            cleaned_json = cleaned_json.replace("```json", "").replace("```", "").strip()
-                        
-                        all_translations = json.loads(cleaned_json)
-                        
-                        # Robustness: Handle if model returns a list instead of dict
-                        if isinstance(all_translations, list):
-                            new_dict = {}
-                            for item in all_translations:
-                                if isinstance(item, dict) and 'id' in item:
-                                    field_id = item.pop('id')
-                                    new_dict[field_id] = item
-                            all_translations = new_dict
-
+                        all_translations = json.loads(response.text)
                         obj_updated = False
-                        if isinstance(all_translations, dict):
-                            for f_name, translations in all_translations.items():
-                                if f_name in fields_to_translate:
-                                    model_field = fields_to_translate[f_name]['field_obj']
-                                    for lang_code, text in translations.items():
-                                        if lang_code in fields_to_translate[f_name]['langs'] and text:
-                                            f_lang = build_localized_fieldname(f_name, lang_code)
-                                            
-                                            # Safety truncation
-                                            final_text = text.strip() if isinstance(text, str) else text
-                                            if hasattr(model_field, 'max_length') and model_field.max_length:
-                                                if len(final_text) > model_field.max_length:
-                                                    final_text = final_text[:model_field.max_length]
+                        
+                        for f_name, translations in all_translations.items():
+                            if f_name in fields_to_translate:
+                                model_field = fields_to_translate[f_name]['field_obj']
+                                for lang_code, text in translations.items():
+                                    if lang_code in fields_to_translate[f_name]['langs'] and text:
+                                        f_lang = build_localized_fieldname(f_name, lang_code)
+                                        
+                                        # Safety truncation
+                                        final_text = text.strip() if isinstance(text, str) else text
+                                        if hasattr(model_field, 'max_length') and model_field.max_length:
+                                            if len(final_text) > model_field.max_length:
+                                                final_text = final_text[:model_field.max_length]
 
-                                            setattr(obj, f_lang, final_text)
-                                            obj_updated = True
-                                            total_translated_count += 1
+                                        setattr(obj, f_lang, final_text)
+                                        obj_updated = True
+                                        total_translated_count += 1
                         
                         if obj_updated:
                             obj.save()
 
-                    # Sleep 5 seconds between objects to stay within 15 RPM (free tier) quota
-                    time.sleep(5.0)
+                    # Small delay to avoid rate limits in bulk
+                    time.sleep(1.0)
 
                 except Exception as e:
-                    if "429" in str(e):
-                         self.stdout.write(self.style.WARNING(f'Rate limit (429) hit for object {obj.id}. Sleeping 10s...'))
-                         time.sleep(10)
-                    else:
-                         self.stdout.write(self.style.ERROR(f'Error translating object {obj.id}: {e}'))
-                         time.sleep(2.0)
+                    self.stdout.write(self.style.ERROR(f'Error translating object {obj.id}: {e}'))
+                    time.sleep(2.0)
 
         self.stdout.write(self.style.SUCCESS(f'Translation complete! Total fields translated: {total_translated_count}'))
