@@ -1,6 +1,7 @@
-from django.db.models.signals import pre_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
-from .services import translate_model_instance
+from threading import Thread
+from .services import translate_model_instance_async
 from .models import (
     Category, Brand, Model, FaultCodes, Parameter, SparePartImage,
     BoilerRepairGuide, BoilerPart, SparePartsDefinitions,
@@ -19,7 +20,14 @@ TRANSLATABLE_MODELS = [
     Product, OnboardModel
 ]
 
-@receiver(pre_save)
-def auto_translate_handler(sender, instance, **kwargs):
+@receiver(post_save)
+def auto_translate_handler(sender, instance, created, **kwargs):
+    """
+    Çeviri işlemini arka plan thread'inde çalıştırır.
+    Model kaydı hemen tamamlanır, çeviri arka planda yapılır.
+    """
     if sender in TRANSLATABLE_MODELS:
-        translate_model_instance(instance)
+        # Arka plan thread'inde çeviri yap - ana isteği bloklamaz
+        thread = Thread(target=translate_model_instance_async, args=(instance,))
+        thread.daemon = True
+        thread.start()

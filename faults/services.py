@@ -175,6 +175,136 @@ def translate_model_instance(instance):
             print(f"DEBUG: Translation error for {field_name}: {e}")
             pass
 
+
+def translate_model_instance_async(instance):
+    """
+    Arka plan thread'inden çağrılmak üzere tasarlanmış çeviri fonksiyonu.
+    Model zaten kaydedilmiş olduğundan, çevirileri doğrudan veritabanına yazar.
+    """
+    from django.db import connection
+    
+    # Thread'de yeni veritabanı bağlantısı aç
+    connection.close()
+    
+    # Check if model is registered for translation
+    try:
+        options = translator.get_options_for_model(instance.__class__)
+    except:
+        return
+    
+    if not options:
+        return
+    
+    # Setup Gemini
+    api_key = config('GEMINI_API_KEY', default=None)
+    if not api_key:
+        logger.warning("GEMINI_API_KEY not found in env, skipping translation.")
+        return
+    
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
+        return
+    
+    TARGET_LANGUAGES = {
+        'en': 'English',
+        'de': 'German',
+        'fr': 'French',
+        'ru': 'Russian',
+        'es': 'Spanish',
+        'it': 'Italian',
+        'ar': 'Arabic',
+    }
+    
+    # Güncel instance'ı veritabanından al
+    try:
+        db_instance = instance.__class__.objects.get(pk=instance.pk)
+    except instance.__class__.DoesNotExist:
+        return
+    
+    update_fields = {}
+    
+    for field_name in options.fields:
+        field_tr = build_localized_fieldname(field_name, 'tr')
+        
+        new_val = getattr(db_instance, field_tr, None)
+        if not new_val:
+            new_val = getattr(db_instance, field_name, None)
+        
+        if not new_val or (isinstance(new_val, str) and len(new_val.strip()) < 2 and field_name != 'code'):
+            continue
+        
+        # Eksik dilleri bul
+        langs_to_translate = []
+        for lang in TARGET_LANGUAGES.keys():
+            f_lang = build_localized_fieldname(field_name, lang)
+            val = getattr(db_instance, f_lang, None)
+            if not val or (isinstance(val, str) and not val.strip()):
+                langs_to_translate.append(lang)
+        
+        if not langs_to_translate:
+            continue
+        
+        try:
+            target_list_str = ", ".join(langs_to_translate)
+            
+            max_len_instruction = ""
+            simplify_instruction = "Do not simplify or shorten.\n"
+            
+            model_field = instance._meta.get_field(field_name)
+            if hasattr(model_field, 'max_length') and model_field.max_length:
+                max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
+                simplify_instruction = ""
+            
+            prompt = (
+                "You are a professional technical translator.\n"
+                f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
+                f"{max_len_instruction}"
+                "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
+                f"{simplify_instruction}"
+                "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
+                "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
+                "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
+                f"Text to translate: {new_val}"
+            )
+            
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            
+            if response.text:
+                translations = json.loads(response.text)
+                
+                for lang_code, translated_text in translations.items():
+                    if lang_code in langs_to_translate and translated_text:
+                        if isinstance(translated_text, str):
+                            translated_text = translated_text.strip()
+                        
+                        if hasattr(model_field, 'max_length') and model_field.max_length:
+                            if len(translated_text) > model_field.max_length:
+                                translated_text = translated_text[:model_field.max_length]
+                        
+                        f_lang = build_localized_fieldname(field_name, lang_code)
+                        update_fields[f_lang] = translated_text
+            
+            time.sleep(0.5)  # Rate limit koruması
+            
+        except Exception as e:
+            logger.warning(f"Translation error for {field_name}: {e}")
+            continue
+    
+    # Tüm çevirileri tek bir UPDATE ile kaydet
+    if update_fields:
+        try:
+            instance.__class__.objects.filter(pk=instance.pk).update(**update_fields)
+            logger.info(f"Translated {len(update_fields)} fields for {instance.__class__.__name__} pk={instance.pk}")
+        except Exception as e:
+            logger.error(f"Failed to save translations: {e}")
+
+
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
     """
