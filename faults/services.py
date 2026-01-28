@@ -39,24 +39,27 @@ def translate_model_instance(instance):
     """
     Translates a model instance using Gemini API if it's registered for translation.
     Intended to be called from a pre_save signal.
+    Uses batching to send all fields in a single API call with timeout protection.
     """
     # Check if model is registered for translation
     try:
         options = translator.get_options_for_model(instance.__class__)
-    except:
-        return # Not a translated model
+    except Exception:
+        return  # Not a translated model
 
     if not options:
         return
 
-    # Setup Gemini
+    # Setup Gemini with HTTP timeout
     api_key = config('GEMINI_API_KEY', default=None)
     if not api_key:
         logger.warning("GEMINI_API_KEY not found in env, skipping translation.")
         return
 
     try:
-        client = genai.Client(api_key=api_key)
+        # Create client with 20 second timeout to prevent Gunicorn worker kills
+        http_options = types.HttpOptions(timeout=20000)  # 20 seconds in ms
+        client = genai.Client(api_key=api_key, http_options=http_options)
     except Exception as e:
         logger.error(f"Failed to initialize Gemini client: {e}")
         return
@@ -79,6 +82,9 @@ def translate_model_instance(instance):
         except instance.__class__.DoesNotExist:
             pass
 
+    # Collect all fields that need translation (batching)
+    fields_to_translate = {}  # {field_name: {'value': str, 'langs': list, 'max_length': int|None}}
+    
     for field_name in options.fields:
         # Source field (TR)
         field_tr = build_localized_fieldname(field_name, 'tr')
@@ -117,63 +123,82 @@ def translate_model_instance(instance):
                 if not val or (isinstance(val, str) and not val.strip()):
                     langs_to_translate.append(lang)
         
-        if not langs_to_translate:
-            continue
-
-        try:
-            # Construct the prompt
-            target_list_str = ", ".join([f"{code}" for code in langs_to_translate])
-            
-            # Max length check logic
-            max_len_instruction = ""
-            simplify_instruction = "Do not simplify or shorten.\n"
-            
+        if langs_to_translate:
             model_field = instance._meta.get_field(field_name)
-            if hasattr(model_field, 'max_length') and model_field.max_length:
-                max_len_instruction = f"IMPORTANT: Each translation MUST be shorter than {model_field.max_length} characters. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
-                simplify_instruction = ""
+            max_length = getattr(model_field, 'max_length', None)
+            fields_to_translate[field_name] = {
+                'value': new_val,
+                'langs': langs_to_translate,
+                'max_length': max_length
+            }
 
-            prompt = (
-                "You are a professional technical translator.\n"
-                f"Translate the following text from Turkish to these languages: {target_list_str}.\n"
-                f"{max_len_instruction}"
-                "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
-                f"{simplify_instruction}"
-                "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
-                "Return ONLY a valid JSON object where keys are the language codes and values are the translations.\n"
-                "Example format: {\"en\": \"Translated text...\", \"de\": \"...\"}\n"
-                f"Text to translate: {new_val}"
-            )
+    # If no fields need translation, return early
+    if not fields_to_translate:
+        return
 
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
+    # Build a single batched prompt for all fields
+    try:
+        all_langs = set()
+        for field_info in fields_to_translate.values():
+            all_langs.update(field_info['langs'])
+        
+        target_list_str = ", ".join(sorted(all_langs))
+        
+        # Build fields description for prompt
+        fields_desc = []
+        for field_name, info in fields_to_translate.items():
+            max_len_note = f" (max {info['max_length']} chars)" if info['max_length'] else ""
+            fields_desc.append(f'"{field_name}"{max_len_note}: "{info["value"]}"')
+        
+        fields_json_str = "{\n  " + ",\n  ".join(fields_desc) + "\n}"
+
+        prompt = (
+            "You are a professional technical translator.\n"
+            f"Translate the following fields from Turkish to these languages: {target_list_str}.\n"
+            "IMPORTANT: If a max character limit is specified for a field, each translation for that field MUST be shorter than the limit. Summarize/abbreviate if necessary to fit, but keep the meaning.\n"
+            "Preserve formatting, HTML tags, headings, bullet points, and units exactly.\n"
+            "Use formal technical terminology suitable for boiler/HVAC maintenance.\n"
+            "Return ONLY a valid JSON object where the structure is: {\"field_name\": {\"lang_code\": \"translation\", ...}, ...}\n"
+            f"Fields to translate:\n{fields_json_str}"
+        )
+
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json")
+        )
+        
+        if response.text:
+            translations = json.loads(response.text)
             
-            if response.text:
-                translations = json.loads(response.text)
+            for field_name, lang_translations in translations.items():
+                if field_name not in fields_to_translate:
+                    continue
+                    
+                field_info = fields_to_translate[field_name]
+                max_length = field_info['max_length']
                 
-                for lang_code, translated_text in translations.items():
-                    if lang_code in langs_to_translate and translated_text:
-                        if isinstance(translated_text, str):
-                            translated_text = translated_text.strip()
+                if not isinstance(lang_translations, dict):
+                    continue
+                    
+                for lang_code, translated_text in lang_translations.items():
+                    if lang_code not in field_info['langs'] or not translated_text:
+                        continue
                         
-                        # Apply max_length truncation as safety net
-                        if hasattr(model_field, 'max_length') and model_field.max_length:
-                             if len(translated_text) > model_field.max_length:
-                                 translated_text = translated_text[:model_field.max_length]
+                    if isinstance(translated_text, str):
+                        translated_text = translated_text.strip()
+                    
+                    # Apply max_length truncation as safety net
+                    if max_length and len(translated_text) > max_length:
+                        translated_text = translated_text[:max_length]
 
-                        f_lang = build_localized_fieldname(field_name, lang_code)
-                        setattr(instance, f_lang, translated_text)
-            
-            # Small sleep to avoid instant rate limit if multiple fields
-            time.sleep(1) 
+                    f_lang = build_localized_fieldname(field_name, lang_code)
+                    setattr(instance, f_lang, translated_text)
 
-        except Exception as e:
-            # Silently fail or log, don't block save
-            print(f"DEBUG: Translation error for {field_name}: {e}")
-            pass
+    except Exception as e:
+        # Log error but don't block save - translation is not critical
+        logger.warning(f"Translation error for {instance.__class__.__name__}: {e}")
+        print(f"DEBUG: Translation error: {e}")
 
 @transaction.atomic
 def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopya)", make_inactive: bool = False, override_brand: Brand | None = None, _signals_disconnected: bool = False) -> BoilerModel:
