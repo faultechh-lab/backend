@@ -12,6 +12,7 @@ from orders.models import Product
 from config.models import OnboardModel
 from modeltranslation.translator import translator
 from modeltranslation.utils import build_localized_fieldname
+import time
 
 TRANSLATABLE_MODELS = [
     Category, Brand, Model, FaultCodes, Parameter, SparePartImage,
@@ -68,7 +69,7 @@ def track_changes_handler(sender, instance, **kwargs):
 def auto_translate_handler(sender, instance, created, **kwargs):
     """
     Çeviri işlemini arka plan thread'inde çalıştırır.
-    Sadece değişen alanlar çevrilir.
+    Süre bilgisiyle birlikte Notification oluşturur.
     """
     if sender not in TRANSLATABLE_MODELS:
         return
@@ -79,10 +80,19 @@ def auto_translate_handler(sender, instance, created, **kwargs):
     if changed_fields is None:
         return
     
+    # Nesne bilgisini al
+    try:
+        object_display = str(instance)[:100]
+    except:
+        object_display = f"{sender.__name__}"
+    
+    # Başlangıç zamanını kaydet
+    start_time = time.time()
+    
     # Arka plan thread'inde çeviri yap
     thread = Thread(
         target=translate_model_instance_async,
-        args=(instance, changed_fields)
+        args=(instance, changed_fields, start_time, object_display)
     )
     thread.daemon = True
     thread.start()

@@ -176,16 +176,21 @@ def translate_model_instance(instance):
             pass
 
 
-def translate_model_instance_async(instance, changed_fields=None):
+def translate_model_instance_async(instance, changed_fields=None, start_time=None, object_display=None):
     """
     Arka plan thread'inden çağrılmak üzere tasarlanmış çeviri fonksiyonu.
     Model zaten kaydedilmiş olduğundan, çevirileri doğrudan veritabanına yazar.
+    Tamamlandığında süre bilgisiyle Notification oluşturur.
     
     Args:
         instance: Çevrilecek model instance'ı
         changed_fields: Değişen alan isimleri listesi veya '__all__' (yeni kayıt için)
+        start_time: Çeviri başlangıç zamanı (time.time())
+        object_display: Nesne görüntü adı
     """
     from django.db import connection
+    # from notifications.models import Notification  <-- Removed
+    import time as time_module
     
     # Thread'de yeni veritabanı bağlantısı aç
     connection.close()
@@ -228,6 +233,7 @@ def translate_model_instance_async(instance, changed_fields=None):
         return
     
     update_fields = {}
+    fields_count = 0
     
     for field_name in options.fields:
         field_tr = build_localized_fieldname(field_name, 'tr')
@@ -303,6 +309,7 @@ def translate_model_instance_async(instance, changed_fields=None):
                         
                         f_lang = build_localized_fieldname(field_name, lang_code)
                         update_fields[f_lang] = translated_text
+                        fields_count += 1
             
             time.sleep(0.5)  # Rate limit koruması
             
@@ -315,8 +322,27 @@ def translate_model_instance_async(instance, changed_fields=None):
         try:
             instance.__class__.objects.filter(pk=instance.pk).update(**update_fields)
             logger.info(f"Translated {len(update_fields)} fields for {instance.__class__.__name__} pk={instance.pk}")
+            
+            # Süreyi hesapla ve cache'e kaydet (frontend polling ile alacak)
+            if start_time:
+                import time as time_module
+                from .translation_cache import set_translation_complete
+                import uuid
+                
+                duration = time_module.time() - start_time
+                
+                set_translation_complete(str(uuid.uuid4()), {
+                    "object_display": object_display or instance.__class__.__name__,
+                    "model_name": instance.__class__.__name__,
+                    "fields_count": fields_count,
+                    "duration": round(duration, 1),
+                    "duration_str": f"{duration:.1f} saniye"
+                })
+                    
         except Exception as e:
             logger.error(f"Failed to save translations: {e}")
+
+
 
 
 @transaction.atomic

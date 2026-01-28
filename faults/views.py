@@ -55,9 +55,26 @@ from rest_framework import status
 from django.utils import translation
 from django.db.models import Q
 from .services import clone_model_with_children, clone_brand_with_children
+from .translation_cache import get_all_completed_translations
 import re
 
 from rest_framework.decorators import api_view, permission_classes
+
+
+class TranslationStatusView(APIView):
+    """
+    Tamamlanan çevirileri döndürür.
+    Frontend bu endpoint'i polling ile çağırarak çeviri tamamlanma bildirimlerini alır.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        completed = get_all_completed_translations()
+        return Response({
+            "completed": completed,
+            "count": len(completed)
+        }, status=status.HTTP_200_OK)
+
 
 def natural_sort_key(s):
     """
