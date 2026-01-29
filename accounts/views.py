@@ -245,6 +245,9 @@ class CheckAuthView(APIView):
         user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
         if not user:
             return Response({'detail': _('Please Log In')}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Update last login on check auth
+        update_last_login(None, user)
 
         serializer = CheckAuthSerializer(request.user, many=False, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -598,7 +601,7 @@ class UserListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name','device_id')
+        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name','device_id', 'last_login', 'date_joined', 'membership_status', 'membership_type', 'membership_expires_at', 'is_active')
         return Response(list(users))
 
 class DefinedDeviceCreateView(APIView):

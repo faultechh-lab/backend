@@ -88,7 +88,7 @@ class CheckAuthSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'avatar','first_name', 'last_name','device_id',
             'is_verified','service_name','membership_status','membership_type','membership_status_display','membership_type_display','membership_created_at',
-            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company',
+            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company', 'last_login',
         )
 
     def get_is_premium(self, obj):
