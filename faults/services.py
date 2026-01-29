@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types
 from decouple import config
 from django.db import transaction
-from django.db.models.signals import pre_save
+from django.db.models.signals import pre_save, post_save
 from django.core.files.base import ContentFile
 from modeltranslation.translator import translator
 from modeltranslation.utils import build_localized_fieldname
@@ -360,7 +360,7 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
     should_disconnect = not _signals_disconnected
     if should_disconnect:
         try:
-            pre_save.disconnect(auto_translate_handler)
+            post_save.disconnect(auto_translate_handler)
         except Exception:
             pass
     # Prepare base fields for model clone
@@ -592,7 +592,7 @@ def clone_model_with_children(source: BoilerModel, *, name_suffix: str = " (kopy
     # Reconnect translation signal if we disconnected it
     if should_disconnect:
         try:
-            pre_save.connect(auto_translate_handler)
+            post_save.connect(auto_translate_handler)
         except Exception:
             pass
 
@@ -606,7 +606,7 @@ def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", m
     
     # Disconnect translation signal to prevent timeouts during bulk copy
     try:
-        pre_save.disconnect(auto_translate_handler)
+        post_save.disconnect(auto_translate_handler)
     except Exception:
         pass
     
@@ -634,7 +634,7 @@ def clone_brand_with_children(source: Brand, *, name_suffix: str = " (kopya)", m
 
     # Reconnect translation signal
     try:
-        pre_save.connect(auto_translate_handler)
+        post_save.connect(auto_translate_handler)
     except Exception:
         pass
 
