@@ -332,10 +332,10 @@ class SearchFaultCodesAPIView(APIView):
         request.LANGUAGE_CODE = lang
         search = request.query_params.get('search', '')
         try:
-            limit = int(request.query_params.get('limit', 25))
+            limit = int(request.query_params.get('limit', 125))
         except Exception:
             limit = 25
-        limit = max(1, min(limit, 100))
+        limit = max(1, min(limit, 125))
 
         if not search or len(search.strip()) < 2:
             return Response([], status=status.HTTP_200_OK)
