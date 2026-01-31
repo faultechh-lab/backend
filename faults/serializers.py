@@ -32,29 +32,73 @@ from .models import (
 class CategorySerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
     has_children = serializers.SerializerMethodField()
+    brand_count = serializers.SerializerMethodField()
+    child_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
-        fields = ("id", "name", 'type','image','active', "parent", "children","has_children")
+        fields = ("id", "name", 'type','image','active', "parent", "children","has_children", "brand_count", "child_count")
     def get_children(self, obj):
         return CategorySerializer(obj.children.filter(parent=obj), many=True).data
     def get_has_children(self, obj):
         return obj.children.exists()
+    def get_brand_count(self, obj):
+        return obj.brands.filter(active=True).count()
+    def get_child_count(self, obj):
+        return obj.children.filter(active=True).count()
 
 
 class BrandSerializer(serializers.ModelSerializer):
     category_name=serializers.CharField(source='category.name')
+    model_count = serializers.SerializerMethodField()
     class Meta:
         model = Brand
         fields = "__all__"
+        extra_fields = ['category_name', 'model_count']
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['category_name'] = instance.category.name if instance.category else None
+        ret['model_count'] = self.get_model_count(instance)
+        return ret
+
+    def get_model_count(self, obj):
+        return obj.models.filter(active=True).count()
 
 
 class ModelSerializer_(serializers.ModelSerializer):
     category_name=serializers.CharField(source='category.name')
     brand_name=serializers.CharField(source='brand.name')
+    item_count = serializers.SerializerMethodField()
     class Meta:
         model = Model
         fields = "__all__"
+        extra_fields = ['category_name', 'brand_name', 'item_count']
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['category_name'] = instance.category.name if instance.category else None
+        ret['brand_name'] = instance.brand.name if instance.brand else None
+        ret['item_count'] = self.get_item_count(instance)
+        return ret
+
+    def get_item_count(self, obj):
+        if not obj.category:
+            return 0
+        cat_type = obj.category.type
+        if cat_type == 'Arıza Kodu':
+            return obj.fault_codes.filter(active=True).count()
+        elif cat_type == 'Parametre':
+            return obj.parameters.filter(active=True).count()
+        elif cat_type == 'Kombi Kart Tamiri':
+            return obj.boiler_card_repairs.filter(active=True).count()
+        elif cat_type == 'Kombi Parçaları':
+            return obj.boiler_parts.filter(active=True).count()
+        elif cat_type == 'Video':
+            return obj.videos.filter(active=True).count()
+        elif cat_type == 'Oda Termosatı':
+            return obj.room_thermostats.filter(active=True).count()
+        return 0
 
 
 class SparePartImageSerializer(serializers.ModelSerializer):
