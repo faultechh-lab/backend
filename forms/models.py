@@ -21,11 +21,11 @@ def process_image(image_field,image_name, max_size=(1200, 1200), quality=92):
         background = Image.new('RGB', img.size, 'white')
         background.paste(img, mask=img.split()[-1])
         img = background
-
+    
     # Görüntüyü yeniden boyutlandır (sadece daha büyükse)
     if img.width > max_size[0] or img.height > max_size[1]:
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
-
+    
     # WebP olarak kaydet
     buffer = BytesIO()
     img.save(buffer, format='WebP', quality=quality, method=6, lossless=False)
@@ -66,3 +66,36 @@ class FormImage(models.Model):
             # process image similar to previous Profile.save behavior
             self.image = process_image(self.image, self.form.title)
         super().save(*args, **kwargs)
+
+class Report(models.Model):
+    REPORT_REASONS = [
+        ('SPAM', 'Spam'),
+        ('HARASSMENT', 'Taciz/Saldırı'),
+        ('INAPPROPRIATE', 'Uygunsuz İçerik'),
+        ('OTHER', 'Diğer'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reports_made')
+    form = models.ForeignKey(Form, on_delete=models.CASCADE, related_name='reports')
+    reason = models.CharField(max_length=20, choices=REPORT_REASONS, default='OTHER')
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'İçerik Raporu'
+        verbose_name_plural = 'İçerik Raporları'
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.form.title} ({self.reason})"
+
+class BlockedUser(models.Model):
+    blocker = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocking')
+    blocked = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Engellenen Kullanıcı'
+        verbose_name_plural = 'Engellenen Kullanıcılar'
+        unique_together = ('blocker', 'blocked')
+
+    def __str__(self):
+        return f"{self.blocker.username} blocked {self.blocked.username}"

@@ -1,11 +1,12 @@
 from django.contrib import admin
-from .models import Form,FormImage
+from .models import Form,FormImage,BlockedUser
 # Register your models here.
 
 
 class FormImageInline(admin.TabularInline):
     model = FormImage
     extra = 1
+
 
 class FormAdmin(admin.ModelAdmin):
     list_display = ("title", "user", "created_at", "updated_at")
@@ -14,3 +15,5 @@ class FormAdmin(admin.ModelAdmin):
     inlines = [FormImageInline]
 
 admin.site.register(Form, FormAdmin)
+
+admin.site.register(BlockedUser)

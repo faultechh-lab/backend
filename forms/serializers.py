@@ -1,11 +1,11 @@
 from rest_framework import serializers
-from .models import Form,FormImage
+from .models import Form, FormImage, Report, BlockedUser
 from accounts.models import User
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id','username','avatar']
+        fields = ['id', 'username', 'avatar']
 
 class FormImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,3 +18,15 @@ class FormSerializer(serializers.ModelSerializer):
     class Meta:
         model = Form
         fields = '__all__'
+
+class ReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = '__all__'
+        read_only_fields = ['user', 'created_at']
+
+class BlockedUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlockedUser
+        fields = '__all__'
+        read_only_fields = ['blocker', 'created_at']
