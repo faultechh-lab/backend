@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Form,FormImage,BlockedUser
+from .models import Form,FormImage,Report,BlockedUser
 # Register your models here.
 
 
@@ -15,5 +15,6 @@ class FormAdmin(admin.ModelAdmin):
     inlines = [FormImageInline]
 
 admin.site.register(Form, FormAdmin)
+admin.site.register(Report)
 
 admin.site.register(BlockedUser)
