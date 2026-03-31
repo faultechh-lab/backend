@@ -8,6 +8,7 @@ import random
 from django.db import transaction
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from accounts.models import MembershipChoices
 
 # Create your views here.
 
@@ -99,6 +100,8 @@ class OrderNotificationCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def _send_notification_email(self, user, notif: OrderNotification):
+        if user.membership_status != MembershipChoices.FREE:
+            return
         subject = f"Yeni Ödeme Bildirimi - {notif.order_number}"
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
         admin_mail = getattr(settings, 'ORDER_NOTIFICATION_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)

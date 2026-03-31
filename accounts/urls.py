@@ -8,7 +8,8 @@ from .views import (
     DefinedDeviceUpdate,DefinedDeviceListView,DefinedDeviceDetailView,DefinedDeviceDeleteView,
     ExpoPushTokenCreateView, ExpoPushTokenUpdate, ExpoPushTokenListView,ExpoPushTokenDetailView,
     FCMPushTokenCreateView, FCMPushTokenUpdate, FCMPushTokenListView, FCMPushTokenDetailView,
-    AuditLogListView, AccountDeleteView,
+    AuditLogListView, AccountDeleteView, TrialUsageTrackView, TrialUsageReportView,
+    NotificationPermissionTrackView, NotificationPermissionReportView,
 )
 
 urlpatterns = [
@@ -48,6 +49,10 @@ urlpatterns = [
     path('fcm-push-token-detail/', FCMPushTokenDetailView.as_view(), name='fcm-push-token-detail'),
     path('audit-logs/', AuditLogListView.as_view(), name='audit-logs'),
     path('account-delete/', AccountDeleteView.as_view(), name='account-delete'),
+    path('trial-usage-track/', TrialUsageTrackView.as_view(), name='trial-usage-track'),
+    path('trial-usage-report/', TrialUsageReportView.as_view(), name='trial-usage-report'),
+    path('notification-permission-track/', NotificationPermissionTrackView.as_view(), name='notification-permission-track'),
+    path('notification-permission-report/', NotificationPermissionReportView.as_view(), name='notification-permission-report'),
     
 
 ]

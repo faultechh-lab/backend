@@ -5,6 +5,7 @@ from rest_framework import status
 import json
 from urllib import request as urlrequest, error as urlerror
 from django.conf import settings
+from django.core.mail import send_mail
 
 from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,DefinedDeviceSerializer,DeviceRenewalSerializer,CategorySerializer,
                             BrandSerializer,ModelSerializer,FaultCodesSerializer,ParameterSerializer,
@@ -13,7 +14,7 @@ from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,Def
                             BoilerBoardRepairerSerializer,FormSerializer,NewsSerializer,NotificationSerializer,ProductSerializer,
                             OrderNotificationSerializer
                             )
-from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken, FCMPushToken
+from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken, FCMPushToken, MembershipChoices
 from rest_framework.authtoken.models import Token
 from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parameter,ParameterImage,BoilerCardRepair,BoilerCardRepairImage,Video,RoomTermostat,
                             BoilerWorkingPrinciple,InstrumentUsage,SparePartsDefinitions,BoilerRepairGuide,BoilerBoardRepairer)
@@ -1153,6 +1154,7 @@ class ExpoPushSendView(APIView):
         send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
         user_id = request.data.get('user')
         user_ids = request.data.get('user_ids') or []
+        only_free = str(request.data.get('only_free')).lower() in ('true', '1', 'yes')
         if isinstance(user_ids, str):
             try:
                 user_ids = json.loads(user_ids)
@@ -1168,6 +1170,13 @@ class ExpoPushSendView(APIView):
             targets = [user_id]
         else:
             return Response({"detail": "Kullanıcı seçimi zorunlu (tek, çoklu veya tüm)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if only_free:
+            targets = list(
+                User.objects.filter(id__in=targets, membership_status=MembershipChoices.FREE).values_list('id', flat=True)
+            )
+            if not targets:
+                return Response({"detail": "Ücretsiz hesap bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
 
         tokens = list(ExpoPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
         if not tokens:
@@ -1211,6 +1220,7 @@ class ExpoPushSendView(APIView):
             'detail': 'Expo push gönderildi',
             'target_count': len(targets),
             'token_count': len(tokens),
+            'only_free': only_free,
             'expo_response': payload,
         }, status=status.HTTP_200_OK)
 
@@ -1298,6 +1308,9 @@ class FCMSendView(APIView):
         is_read = bool(request.data.get('is_read'))
         send_via = str(request.data.get('send_via') or '').lower()
         platform = str(request.data.get('platform') or '').lower()
+        send_email = str(request.data.get('send_email')).lower() in ('true', '1', 'yes')
+        email_subject = str(request.data.get('email_subject') or '').strip() or title
+        membership_filter = str(request.data.get('membership_filter') or '').lower()
 
         if not title or not message:
             return Response({"detail": "Başlık ve mesaj zorunludur"}, status=400)
@@ -1306,6 +1319,9 @@ class FCMSendView(APIView):
         send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
         user_id = request.data.get('user')
         user_ids = request.data.get('user_ids') or []
+        only_free = str(request.data.get('only_free')).lower() in ('true', '1', 'yes')
+        if membership_filter not in ('all', 'free', 'premium'):
+            membership_filter = 'free' if only_free else 'all'
 
         if isinstance(user_ids, str):
             try:
@@ -1322,7 +1338,24 @@ class FCMSendView(APIView):
         else:
             return Response({"detail": "Kullanıcı seçimi zorunlu"}, status=400)
 
+        if membership_filter == 'free':
+            targets = list(
+                User.objects.filter(id__in=targets, membership_status=MembershipChoices.FREE).values_list('id', flat=True)
+            )
+            if not targets:
+                return Response({"detail": "Ücretsiz hesap bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+        elif membership_filter == 'premium':
+            targets = list(
+                User.objects.filter(id__in=targets, membership_status=MembershipChoices.PREMIUM).values_list('id', flat=True)
+            )
+            if not targets:
+                return Response({"detail": "Ücretli hesap bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+
         # --- Tokenlar ---
+        users_qs = User.objects.filter(id__in=targets)
+        fcm_user_ids = list(FCMPushToken.objects.filter(user_id__in=targets).values_list('user_id', flat=True).distinct())
+        expo_user_ids = list(ExpoPushToken.objects.filter(user_id__in=targets).values_list('user_id', flat=True).distinct())
+        users_with_push_token = len(set(fcm_user_ids + expo_user_ids))
         fcm_tokens = list(FCMPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
         expo_tokens = list(ExpoPushToken.objects.filter(user_id__in=targets).values_list('token', flat=True))
 
@@ -1432,14 +1465,26 @@ class FCMSendView(APIView):
         # 🔥 Bildirim Kaydı
         # ******************************************************
         try:
-            users = User.objects.filter(id__in=targets)
-            for u in users:
+            for u in users_qs:
                 Notification.objects.create(
                     user=u, title=title, message=message,
                     type=type_, is_read=is_read
                 )
         except:
             pass
+
+        email_targets = 0
+        email_sent = 0
+        if send_email:
+            recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
+            email_targets = len(recipients)
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            for recipient in recipients:
+                try:
+                    send_mail(email_subject, message, from_email, [recipient], fail_silently=True)
+                    email_sent += 1
+                except Exception:
+                    pass
 
         # ******************************************************
         # 🔥 Response
@@ -1449,7 +1494,13 @@ class FCMSendView(APIView):
             "targets": len(targets),
             "fcm_tokens": len(fcm_tokens),
             "expo_tokens": len(expo_tokens),
+            "membership_filter": membership_filter,
             "delivery": delivery,
             "fcm_results": fcm_results,
             "expo_results": expo_results,
+            "send_email": send_email,
+            "email_targets": email_targets,
+            "email_sent": email_sent,
+            "users_with_push_token": users_with_push_token,
+            "users_without_push_token": max(len(targets) - users_with_push_token, 0),
         })
