@@ -80,111 +80,69 @@ def send_welcome_email(user, lang=None):
 
     # Branded HTML body inspired by the provided design (hero + dark intro band + features)
     html_body = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>{subject}</title>
-      <style>
-        body {{
-          margin: 0 !important;
-          padding: 0 !important;
-          background-color: #f1f4f9;
-          -webkit-text-size-adjust: 100%;
-          -ms-text-size-adjust: 100%;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, Helvetica, sans-serif;
-          color: #111827;
-        }}
-        .wrap {{
-          width: 100%;
-          padding: 24px 0;
-          background: #f1f4f9;
-        }}
-        .card {{
-          width: 100%;
-          max-width: 720px;
-          margin: 0 auto;
-          background: #ffffff;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 12px 24px rgba(0,0,0,0.06);
-        }}
-        .header {{
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 20px;
-          background: #ffffff;
-          border-bottom: 1px solid #eef2f7;
-        }}
-        .logo {{
-          width: 36px; height: 36px; border-radius: 8px; background:#0ea5e9; display:inline-block;
-        }}
-        .title {{ font-weight: 700; color:#0f172a; font-size: 16px; }}
+    <html>
+    <body style="margin:0;padding:0;background:#0f172a;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:24px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:640px;">
+              <tr>
+                <td style="padding:0 0 12px 0;text-align:center;">
+                  <span style="display:inline-block;padding:6px 14px;border-radius:999px;background:#1e3a8a;color:#bfdbfe;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.5px;">FAULTECH</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:linear-gradient(135deg,#2563eb 0%,#0a84ff 100%);padding:24px 24px 20px 24px;border-radius:16px 16px 0 0;">
+                  <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.8px;text-transform:uppercase;">Hesap Doğrulama</div>
+                  <h1 style="margin:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;color:#ffffff;font-weight:800;">{subject}</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#ffffff;border:1px solid #dbe3f0;border-top:0;border-radius:0 0 16px 16px;padding:24px;">
+                  <p style="margin:0 0 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+                    {greeting}
+                  </p>
+                  
+                  <div style="margin:0 0 18px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#1f2937;">
+                    {intro}
+                  </div>
 
-        /* HERO - single image for maximum compatibility */
-        .hero-single img {{ width:100%; height:auto; display:block; max-height:260px; object-fit:cover; }}
-        .welcome-band {{ background:#111827; color:#ffffff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
+                  <p style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;font-weight:700;">
+                    {instruction}
+                  </p>
 
-        /* DARK INTRO */
-        .intro {{ background:#111827; color:#e5e7eb; padding: 22px 22px; text-align:center; }}
-        .intro p {{ margin:0; line-height:1.7; font-size: 14px; }}
+                  <div style="display:inline-block;background:#f3f4f6;border:1px solid #e5e7eb;padding:14px 18px;border-radius:10px;letter-spacing:6px;font-weight:800;font-size:28px;color:#0f172a;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;margin-bottom:10px;">
+                    {code}
+                  </div>
+                  
+                  <p style="margin:0 0 18px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280;">
+                    {code_note}
+                  </p>
 
-        /* CONTENT */
-        .content {{ padding: 22px; }}
-        .label {{ font-weight: 700; color:#111827; margin: 0 0 8px 0; }}
-        .codebox {{ display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding: 14px 18px; border-radius:10px; letter-spacing: 6px; font-weight:800; font-size: 28px; color:#0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }}
-        .note {{ color:#6b7280; margin: 10px 0 0 0; }}
-        .divider {{ height:1px; background:#eef2f7; border:0; margin: 20px 0; }}
-
-        /* FEATURES */
-        .features {{ display:flex; justify-content: space-between; gap:12px; padding: 18px 22px 28px 22px; text-align:center; }}
-        .feat {{ flex:1; color:#0f172a; }}
-        .feat-icon {{ width:48px; height:48px; margin:0 auto 8px auto; color:#0f172a; }}
-        .feat-title {{ font-weight: 700; font-size: 13px; color:#1f2937; }}
-
-        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding: 0 22px 18px 22px; }}
-
-        @media (max-width: 560px) {{
-          .features {{ display:block; }}
-          .feat {{ margin-bottom: 14px; }}
-          .codebox {{ font-size: 22px; letter-spacing: 4px; }}
-        }}
-      </style>
-    </head>
-    <body>
-      <div class="wrap">
-        <div class="card">
-          <!-- Header with logo and title -->
-          <div class="header">
-            <div class="title">FaultTech</div>
-          </div>
-          <div class="welcome-band">{subject}</div>
-
-          <!-- Dark intro band -->
-          <div class="intro">
-            <p>{intro}</p>
-          </div>
-
-          <!-- Main content: greeting + code -->
-          <div class="content">
-            <p>{greeting}</p>
-            <p class="label">{instruction}</p>
-            <div class="codebox">{code}</div>
-            <p class="note">{code_note}</p>
-            <hr class="divider" />
-
-            <!-- Features -->
-   
-            <p>{outro}</p>
-          </div>
-
-          <div class="footer">
-            {getattr(settings, 'SITE_NAME', 'FaultTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}
-          </div>
-        </div>
-      </div>
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:0 0 16px 0;">
+                    <tr>
+                      <td style="padding:0 0 0 14px;border-left:4px solid #2563eb;">
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#475569;">
+                          {outro}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#334155;">
+                    Sevgiler,<br/>
+                    <strong style="color:#0f172a;">{getattr(settings, 'SITE_NAME', 'FaulTech')} Ekibi</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 8px 0 8px;text-align:center;">
+                  <span style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;">Bu e-posta {getattr(settings, 'SITE_NAME', 'FaulTech')} bildirim sistemi üzerinden gönderilmiştir.</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     """
@@ -224,36 +182,57 @@ def send_new_device_email(user, lang=None):
 
     # Minimal HTML body
     html_body = f"""
-    <!DOCTYPE html>
-    <html lang=\"en\">
-    <head>
-      <meta charset=\"UTF-8\" />
-      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-      <title>{subject}</title>
-      <style>
-        body {{ margin:0; padding:0; background:#f1f4f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,Helvetica,sans-serif; color:#111827; }}
-        .wrap {{ width:100%; padding:24px 0; }}
-        .card {{ width:100%; max-width:720px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05),0 12px 24px rgba(0,0,0,0.06); }}
-        .header {{ display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef2f7; }}
-        .title {{ font-weight:700; color:#0f172a; font-size:16px; }}
-        .band {{ background:#111827; color:#fff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
-        .content {{ padding:22px; }}
-        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding:0 22px 18px 22px; }}
-      </style>
-    </head>
-    <body>
-      <div class=\"wrap\">
-        <div class=\"card\">
-          <div class=\"header\"><div class=\"title\">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div></div>
-          <div class=\"band\">{subject}</div>
-          <div class=\"content\">
-            <p>{greeting}</p>
-            <p>{message_line}</p>
-            <p style=\"margin-top:16px; color:#6b7280;\">{outro}</p>
-          </div>
-          <div class=\"footer\">{getattr(settings, 'SITE_NAME', 'FaulTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}</div>
-        </div>
-      </div>
+    <html>
+    <body style="margin:0;padding:0;background:#0f172a;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:24px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:640px;">
+              <tr>
+                <td style="padding:0 0 12px 0;text-align:center;">
+                  <span style="display:inline-block;padding:6px 14px;border-radius:999px;background:#1e3a8a;color:#bfdbfe;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.5px;">FAULTECH</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:linear-gradient(135deg,#2563eb 0%,#0a84ff 100%);padding:24px 24px 20px 24px;border-radius:16px 16px 0 0;">
+                  <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.8px;text-transform:uppercase;">Güvenlik Uyarısı</div>
+                  <h1 style="margin:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;color:#ffffff;font-weight:800;">{subject}</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#ffffff;border:1px solid #dbe3f0;border-top:0;border-radius:0 0 16px 16px;padding:24px;">
+                  <p style="margin:0 0 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+                    {greeting}
+                  </p>
+                  
+                  <div style="margin:0 0 18px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#1f2937;">
+                    {message_line}
+                  </div>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:0 0 16px 0;">
+                    <tr>
+                      <td style="padding:0 0 0 14px;border-left:4px solid #2563eb;">
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#475569;">
+                          {outro}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#334155;">
+                    Sevgiler,<br/>
+                    <strong style="color:#0f172a;">{getattr(settings, 'SITE_NAME', 'FaulTech')} Ekibi</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 8px 0 8px;text-align:center;">
+                  <span style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;">Bu e-posta {getattr(settings, 'SITE_NAME', 'FaulTech')} bildirim sistemi üzerinden gönderilmiştir.</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     """
@@ -302,46 +281,69 @@ def send_device_renewals_email(user, lang=None):
 
     # HTML body (aligned with other templates)
     html_body = f"""
-    <!DOCTYPE html>
-    <html lang=\"en\">
-    <head>
-      <meta charset=\"UTF-8\" />
-      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-      <title>{subject}</title>
-      <style>
-        body {{ margin:0; padding:0; background:#f1f4f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,Helvetica,sans-serif; color:#111827; }}
-        .wrap {{ width:100%; padding:24px 0; }}
-        .card {{ width:100%; max-width:720px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05),0 12px 24px rgba(0,0,0,0.06); }}
-        .header {{ display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef2f7; }}
-        .logo {{ width:36px; height:36px; border-radius:8px; background:#10b981; display:inline-block; }}
-        .title {{ font-weight:700; color:#0f172a; font-size:16px; }}
-        .band {{ background:#111827; color:#fff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
-        .content {{ padding:22px; }}
-        .label {{ font-weight:700; color:#111827; margin:0 0 8px 0; }}
-        .codebox {{ display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:14px 18px; border-radius:10px; letter-spacing:6px; font-weight:800; font-size:28px; color:#0f172a; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }}
-        .note {{ color:#6b7280; margin:10px 0 0 0; }}
-        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding:0 22px 18px 22px; }}
-        @media (max-width:560px) {{ .codebox {{ font-size:22px; letter-spacing:4px; }} }}
-      </style>
-    </head>
-    <body>
-      <div class=\"wrap\">
-        <div class=\"card\">
-          <div class=\"header\">
-            <div class=\"title\">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div>
-          </div>
-          <div class=\"band\">{subject}</div>
-          <div class=\"content\">
-            <p>{greeting}</p>
-            <p>{intro}</p>
-            <p class=\"label\">{instruction}</p>
-            <div class=\"codebox\">{code}</div>
-            <p class=\"note\">{code_note}</p>
-            <p style=\"margin-top:16px; color:#6b7280;\">{outro}</p>
-          </div>
-          <div class=\"footer\">{getattr(settings, 'SITE_NAME', 'FaulTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}</div>
-        </div>
-      </div>
+    <html>
+    <body style="margin:0;padding:0;background:#0f172a;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:24px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:640px;">
+              <tr>
+                <td style="padding:0 0 12px 0;text-align:center;">
+                  <span style="display:inline-block;padding:6px 14px;border-radius:999px;background:#1e3a8a;color:#bfdbfe;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.5px;">FAULTECH</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:linear-gradient(135deg,#2563eb 0%,#0a84ff 100%);padding:24px 24px 20px 24px;border-radius:16px 16px 0 0;">
+                  <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.8px;text-transform:uppercase;">Güvenlik Kodu</div>
+                  <h1 style="margin:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;color:#ffffff;font-weight:800;">{{subject}}</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#ffffff;border:1px solid #dbe3f0;border-top:0;border-radius:0 0 16px 16px;padding:24px;">
+                  <p style="margin:0 0 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+                    {{greeting}}
+                  </p>
+                  
+                  <div style="margin:0 0 18px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#1f2937;">
+                    {{intro}}
+                  </div>
+
+                  <p style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;font-weight:700;">
+                    {{instruction}}
+                  </p>
+
+                  <div style="display:inline-block;background:#f3f4f6;border:1px solid #e5e7eb;padding:14px 18px;border-radius:10px;letter-spacing:6px;font-weight:800;font-size:28px;color:#0f172a;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;margin-bottom:10px;">
+                    {{code}}
+                  </div>
+                  
+                  <p style="margin:0 0 18px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280;">
+                    {{code_note}}
+                  </p>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:0 0 16px 0;">
+                    <tr>
+                      <td style="padding:0 0 0 14px;border-left:4px solid #2563eb;">
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#475569;">
+                          {{outro}}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#334155;">
+                    Sevgiler,<br/>
+                    <strong style="color:#0f172a;">{getattr(settings, 'SITE_NAME', 'FaulTech')} Ekibi</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 8px 0 8px;text-align:center;">
+                  <span style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;">Bu e-posta {getattr(settings, 'SITE_NAME', 'FaulTech')} bildirim sistemi üzerinden gönderilmiştir.</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     """
@@ -396,60 +398,69 @@ def send_password_reset_email(user, lang=None):
 
     # HTML body (reuses general styling used in welcome email)
     html_body = f"""
-    <!DOCTYPE html>
-    <html lang=\"en\">
-    <head>
-      <meta charset=\"UTF-8\" />
-      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-      <title>{subject}</title>
-      <style>
-        body {{
-          margin: 0 !important;
-          padding: 0 !important;
-          background-color: #f1f4f9;
-          -webkit-text-size-adjust: 100%;
-          -ms-text-size-adjust: 100%;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, Helvetica, sans-serif;
-          color: #111827;
-        }}
-        .wrap {{ width: 100%; padding: 24px 0; background: #f1f4f9; }}
-        .card {{ width: 100%; max-width: 720px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 12px 24px rgba(0,0,0,0.06); }}
-        .header {{ display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: #ffffff; border-bottom: 1px solid #eef2f7; }}
-        .logo {{ width: 36px; height: 36px; border-radius: 8px; background:#ef4444; display:inline-block; }}
-        .title {{ font-weight: 700; color:#0f172a; font-size: 16px; }}
-        .hero-single img {{ width:100%; height:auto; display:block; max-height:260px; object-fit:cover; }}
-        .band {{ background:#111827; color:#ffffff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
-        .intro {{ background:#111827; color:#e5e7eb; padding: 22px 22px; text-align:center; }}
-        .intro p {{ margin:0; line-height:1.7; font-size: 14px; }}
-        .content {{ padding: 22px; }}
-        .label {{ font-weight: 700; color:#111827; margin: 0 0 8px 0; }}
-        .codebox {{ display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding: 14px 18px; border-radius:10px; letter-spacing: 6px; font-weight:800; font-size: 28px; color:#0f172a; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }}
-        .note {{ color:#6b7280; margin: 10px 0 0 0; }}
-        .divider {{ height:1px; background:#eef2f7; border:0; margin: 20px 0; }}
-        .cta {{ display:inline-block; background:#ef4444; color:#ffffff !important; text-decoration:none; padding: 12px 18px; border-radius:10px; font-weight:700; margin-top: 12px; }}
-        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding: 0 22px 18px 22px; }}
-        @media (max-width: 560px) {{ .codebox {{ font-size: 22px; letter-spacing: 4px; }} }}
-      </style>
-    </head>
-    <body>
-      <div class=\"wrap\">
-        <div class=\"card\">
-          <div class=\"header\">
-            <div class=\"title\">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div>
-          </div>
-          <div class=\"band\">{subject}</div>
-          <div class=\"content\">
-            <p>{greeting}</p>
-            <p>{intro}</p>
-            <p class=\"label\">{instruction}</p>
-            <div class=\"codebox\">{code}</div>
-            <p class=\"note\">{code_note}</p>
-            <hr class=\"divider\" />
-            <p style=\"margin-top:16px; color:#6b7280;\">{outro}</p>
-          </div>
-          <div class=\"footer\">{getattr(settings, 'SITE_NAME', 'FaulTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}</div>
-        </div>
-      </div>
+    <html>
+    <body style="margin:0;padding:0;background:#0f172a;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:24px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:640px;">
+              <tr>
+                <td style="padding:0 0 12px 0;text-align:center;">
+                  <span style="display:inline-block;padding:6px 14px;border-radius:999px;background:#1e3a8a;color:#bfdbfe;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.5px;">FAULTECH</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:linear-gradient(135deg,#2563eb 0%,#0a84ff 100%);padding:24px 24px 20px 24px;border-radius:16px 16px 0 0;">
+                  <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.8px;text-transform:uppercase;">Şifre Sıfırlama</div>
+                  <h1 style="margin:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;color:#ffffff;font-weight:800;">{subject}</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#ffffff;border:1px solid #dbe3f0;border-top:0;border-radius:0 0 16px 16px;padding:24px;">
+                  <p style="margin:0 0 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+                    {greeting}
+                  </p>
+                  
+                  <div style="margin:0 0 18px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#1f2937;">
+                    {intro}
+                  </div>
+
+                  <p style="margin:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;font-weight:700;">
+                    {instruction}
+                  </p>
+
+                  <div style="display:inline-block;background:#f3f4f6;border:1px solid #e5e7eb;padding:14px 18px;border-radius:10px;letter-spacing:6px;font-weight:800;font-size:28px;color:#0f172a;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;margin-bottom:10px;">
+                    {code}
+                  </div>
+                  
+                  <p style="margin:0 0 18px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280;">
+                    {code_note}
+                  </p>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:0 0 16px 0;">
+                    <tr>
+                      <td style="padding:0 0 0 14px;border-left:4px solid #2563eb;">
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.7;color:#475569;">
+                          {outro}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#334155;">
+                    Sevgiler,<br/>
+                    <strong style="color:#0f172a;">{getattr(settings, 'SITE_NAME', 'FaulTech')} Ekibi</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 8px 0 8px;text-align:center;">
+                  <span style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;">Bu e-posta {getattr(settings, 'SITE_NAME', 'FaulTech')} bildirim sistemi üzerinden gönderilmiştir.</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
     """
