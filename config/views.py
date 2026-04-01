@@ -1148,6 +1148,10 @@ class ExpoPushSendView(APIView):
         type_ = request.data.get('type') or 'info'
         is_read = bool(request.data.get('is_read'))
 
+        send_email = str(request.data.get('send_email')).lower() in ('true', '1', 'yes')
+        email_subject = str(request.data.get('email_subject') or '').strip() or title
+        email_content = request.data.get('email_content') or message
+
         if not title.strip() or not message.strip():
             return Response({"detail": "Başlık ve mesaj zorunludur"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1208,20 +1212,47 @@ class ExpoPushSendView(APIView):
         except Exception as e:
             return Response({"detail": "Expo push gönderimi sırasında hata", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # İsteğe bağlı: DB Notification kaydı oluştur
+        users_qs = User.objects.filter(id__in=targets)
+
+        # DB Notification kaydı oluştur (Optimize edilmiş bulk_create)
         try:
-            users_qs = User.objects.filter(id__in=targets)
-            for u in users_qs:
-                Notification.objects.create(user=u, title=title, message=message, type=type_, is_read=is_read)
+            notifications_to_create = [
+                Notification(user=u, title=title, message=message, type=type_, is_read=is_read)
+                for u in users_qs
+            ]
+            Notification.objects.bulk_create(notifications_to_create, batch_size=100)
         except Exception:
             pass
 
+        email_targets = 0
+        email_sent = 0
+        if send_email:
+            try:
+                recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
+                email_targets = len(recipients)
+                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+                from django.core.mail import get_connection, EmailMessage
+                with get_connection() as connection:
+                    email_messages = [
+                        EmailMessage(email_subject, email_content, from_email, [recipient])
+                        for recipient in recipients
+                    ]
+                    try:
+                        connection.send_messages(email_messages)
+                        email_sent = len(email_messages)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
         return Response({
-            'detail': 'Expo push gönderildi',
+            'detail': 'Push ve e-posta gönderildi' if send_email else 'Expo push gönderildi',
             'target_count': len(targets),
             'token_count': len(tokens),
             'only_free': only_free,
             'expo_response': payload,
+            'email_targets': email_targets,
+            'email_sent': email_sent,
         }, status=status.HTTP_200_OK)
 
 
@@ -1465,26 +1496,32 @@ class FCMSendView(APIView):
         # 🔥 Bildirim Kaydı
         # ******************************************************
         try:
-            for u in users_qs:
-                Notification.objects.create(
-                    user=u, title=title, message=message,
-                    type=type_, is_read=is_read
-                )
-        except:
+            notifications_to_create = [
+                Notification(user=u, title=title, message=message, type=type_, is_read=is_read)
+                for u in users_qs
+            ]
+            Notification.objects.bulk_create(notifications_to_create, batch_size=100)
+        except Exception:
             pass
 
         email_targets = 0
         email_sent = 0
         if send_email:
+            email_content = request.data.get('email_content') or message
             recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
             email_targets = len(recipients)
             from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
-            for recipient in recipients:
-                try:
-                    send_mail(email_subject, message, from_email, [recipient], fail_silently=True)
-                    email_sent += 1
-                except Exception:
-                    pass
+            from django.core.mail import get_connection, EmailMessage
+            try:
+                with get_connection() as connection:
+                    email_messages = [
+                        EmailMessage(email_subject, email_content, from_email, [recipient])
+                        for recipient in recipients
+                    ]
+                    connection.send_messages(email_messages)
+                    email_sent = len(email_messages)
+            except Exception:
+                pass
 
         # ******************************************************
         # 🔥 Response
