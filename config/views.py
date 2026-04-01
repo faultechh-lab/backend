@@ -30,6 +30,43 @@ from google.auth.transport.requests import Request as GoogleRequest
 import requests
 SCOPES = ['https://www.googleapis.com/auth/firebase.messaging']
 
+def get_html_notification(subject, text_content):
+    html_content = text_content.replace('\n', '<br />')
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{subject}</title>
+      <style>
+        body {{ margin:0; padding:0; background:#f1f4f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,Helvetica,sans-serif; color:#111827; }}
+        .wrap {{ width:100%; padding:24px 0; }}
+        .card {{ width:100%; max-width:720px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05),0 12px 24px rgba(0,0,0,0.06); }}
+        .header {{ display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef2f7; }}
+        .title {{ font-weight:700; color:#0f172a; font-size:16px; }}
+        .band {{ background:#111827; color:#fff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
+        .content {{ padding:32px 22px; line-height:1.6; font-size:15px; color:#374151; }}
+        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding:20px 22px 18px 22px; border-top:1px solid #eef2f7; margin-top:10px; }}
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="card">
+          <div class="header">
+             <div class="title">{getattr(settings, 'SITE_NAME', 'FaulTech')}</div>
+          </div>
+          <div class="band">{subject}</div>
+          <div class="content">
+            {html_content}
+          </div>
+          <div class="footer">{getattr(settings, 'SITE_NAME', 'FaulTech')} · {getattr(settings, 'DEFAULT_FROM_EMAIL', '')}</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
 def get_fcm_access_token():
     try:
         from google.oauth2.service_account import Credentials
@@ -1235,12 +1272,14 @@ class ExpoPushSendView(APIView):
                 recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
                 email_targets = len(recipients)
                 from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
-                from django.core.mail import get_connection, EmailMessage
+                from django.core.mail import get_connection, EmailMultiAlternatives
+                html_body = get_html_notification(email_subject, email_content)
                 with get_connection() as connection:
-                    email_messages = [
-                        EmailMessage(email_subject, email_content, from_email, [recipient])
-                        for recipient in recipients
-                    ]
+                    email_messages = []
+                    for recipient in recipients:
+                        msg = EmailMultiAlternatives(email_subject, email_content, from_email, [recipient])
+                        msg.attach_alternative(html_body, "text/html")
+                        email_messages.append(msg)
                     try:
                         connection.send_messages(email_messages)
                         email_sent = len(email_messages)
@@ -1515,13 +1554,15 @@ class FCMSendView(APIView):
             recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
             email_targets = len(recipients)
             from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
-            from django.core.mail import get_connection, EmailMessage
+            from django.core.mail import get_connection, EmailMultiAlternatives
+            html_body = get_html_notification(email_subject, email_content)
             try:
                 with get_connection() as connection:
-                    email_messages = [
-                        EmailMessage(email_subject, email_content, from_email, [recipient])
-                        for recipient in recipients
-                    ]
+                    email_messages = []
+                    for recipient in recipients:
+                        msg = EmailMultiAlternatives(email_subject, email_content, from_email, [recipient])
+                        msg.attach_alternative(html_body, "text/html")
+                        email_messages.append(msg)
                     connection.send_messages(email_messages)
                     email_sent = len(email_messages)
             except Exception:
