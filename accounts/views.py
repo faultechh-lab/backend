@@ -937,7 +937,7 @@ class TrialUsageReportView(APIView):
                 'created_at': log.created_at.isoformat(),
             })
 
-        export_format = str(request.GET.get('export') or request.GET.get('format') or 'json').lower()
+        export_format = str(request.GET.get('format', 'json')).lower()
         if export_format == 'csv':
             response = HttpResponse(content_type='text/csv; charset=utf-8')
             filename = timezone.now().strftime('trial-usage-%Y%m%d-%H%M%S.csv')
@@ -1024,7 +1024,7 @@ class NotificationPermissionReportView(APIView):
         if denied_only:
             rows = [item for item in rows if not item.get('can_receive_notifications')]
 
-        export_format = str(request.GET.get('export') or request.GET.get('format') or 'json').lower()
+        export_format = str(request.GET.get('format', 'json')).lower()
         if export_format == 'csv':
             response = HttpResponse(content_type='text/csv; charset=utf-8')
             filename = timezone.now().strftime('notification-permission-%Y%m%d-%H%M%S.csv')

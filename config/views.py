@@ -5,9 +5,7 @@ from rest_framework import status
 import json
 from urllib import request as urlrequest, error as urlerror
 from django.conf import settings
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
+from django.core.mail import send_mail
 
 from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,DefinedDeviceSerializer,DeviceRenewalSerializer,CategorySerializer,
                             BrandSerializer,ModelSerializer,FaultCodesSerializer,ParameterSerializer,
@@ -31,32 +29,6 @@ from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request as GoogleRequest
 import requests
 SCOPES = ['https://www.googleapis.com/auth/firebase.messaging']
-
-
-def send_premium_campaign_email(user, subject, fallback_message, email_content):
-    recipient = (user.email or '').strip()
-    if not recipient:
-        return False
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
-    if not from_email:
-        return False
-    content = (email_content or '').strip()
-    html_body = render_to_string('emails/premium_campaign.html', {
-        'username': user.username,
-        'title': subject,
-        'content': content,
-        'fallback_message': fallback_message,
-    })
-    text_body = strip_tags(html_body)
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=from_email,
-        to=[recipient],
-    )
-    msg.attach_alternative(html_body, "text/html")
-    msg.send(fail_silently=True)
-    return True
 
 def get_fcm_access_token():
     try:
@@ -1175,14 +1147,9 @@ class ExpoPushSendView(APIView):
         data = request.data.get('data') or {}
         type_ = request.data.get('type') or 'info'
         is_read = bool(request.data.get('is_read'))
-        send_email = str(request.data.get('send_email')).lower() in ('true', '1', 'yes')
-        email_subject = str(request.data.get('email_subject') or '').strip() or title
-        email_content = str(request.data.get('email_content') or '').strip()
 
         if not title.strip() or not message.strip():
             return Response({"detail": "Başlık ve mesaj zorunludur"}, status=status.HTTP_400_BAD_REQUEST)
-        if send_email and not email_content:
-            return Response({"detail": "Mail içeriği zorunludur"}, status=status.HTTP_400_BAD_REQUEST)
 
         send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
         user_id = request.data.get('user')
@@ -1249,27 +1216,12 @@ class ExpoPushSendView(APIView):
         except Exception:
             pass
 
-        email_targets = 0
-        email_sent = 0
-        if send_email:
-            recipients_qs = users_qs.exclude(email__isnull=True).exclude(email='')
-            email_targets = recipients_qs.count()
-            for u in recipients_qs:
-                try:
-                    if send_premium_campaign_email(u, email_subject, message, email_content):
-                        email_sent += 1
-                except Exception:
-                    pass
-
         return Response({
             'detail': 'Expo push gönderildi',
             'target_count': len(targets),
             'token_count': len(tokens),
             'only_free': only_free,
             'expo_response': payload,
-            'send_email': send_email,
-            'email_targets': email_targets,
-            'email_sent': email_sent,
         }, status=status.HTTP_200_OK)
 
 
@@ -1358,13 +1310,10 @@ class FCMSendView(APIView):
         platform = str(request.data.get('platform') or '').lower()
         send_email = str(request.data.get('send_email')).lower() in ('true', '1', 'yes')
         email_subject = str(request.data.get('email_subject') or '').strip() or title
-        email_content = str(request.data.get('email_content') or '').strip()
         membership_filter = str(request.data.get('membership_filter') or '').lower()
 
         if not title or not message:
             return Response({"detail": "Başlık ve mesaj zorunludur"}, status=400)
-        if send_email and not email_content:
-            return Response({"detail": "Mail içeriği zorunludur"}, status=400)
 
         # --- Target Seçimi ---
         send_all = str(request.data.get('send_all')).lower() in ('true', '1', 'yes')
@@ -1420,8 +1369,6 @@ class FCMSendView(APIView):
         # 🔥 FCM HTTP v1 Gönderim
         # ******************************************************
         fcm_results = []
-        fcm_success_count = 0
-        fcm_error_count = 0
         fcm_success = False
         delivery = None
 
@@ -1467,22 +1414,13 @@ class FCMSendView(APIView):
                             "notification": {"channel_id": "default"}
                         }
                     r = requests.post(url, headers=headers, json=body, timeout=10)
-                    parsed = None
                     try:
-                        parsed = r.json()
-                    except Exception:
-                        parsed = {"raw": r.text}
-                    fcm_results.append({
-                        "status_code": r.status_code,
-                        "response": parsed
-                    })
-                    if 200 <= r.status_code < 300:
-                        fcm_success_count += 1
-                    else:
-                        fcm_error_count += 1
+                        fcm_results.append(r.json())
+                    except:
+                        fcm_results.append({"raw": r.text})
 
-                fcm_success = fcm_success_count > 0
-                delivery = "fcm_v1" if fcm_success else "fcm_v1_error"
+                fcm_success = True
+                delivery = "fcm_v1"
 
             except Exception as e:
                 fcm_results = {"error": str(e)}
@@ -1538,12 +1476,13 @@ class FCMSendView(APIView):
         email_targets = 0
         email_sent = 0
         if send_email:
-            recipients_qs = users_qs.exclude(email__isnull=True).exclude(email='')
-            email_targets = recipients_qs.count()
-            for u in recipients_qs:
+            recipients = list(users_qs.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True))
+            email_targets = len(recipients)
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            for recipient in recipients:
                 try:
-                    if send_premium_campaign_email(u, email_subject, message, email_content):
-                        email_sent += 1
+                    send_mail(email_subject, message, from_email, [recipient], fail_silently=True)
+                    email_sent += 1
                 except Exception:
                     pass
 
@@ -1557,8 +1496,6 @@ class FCMSendView(APIView):
             "expo_tokens": len(expo_tokens),
             "membership_filter": membership_filter,
             "delivery": delivery,
-            "fcm_success_count": fcm_success_count,
-            "fcm_error_count": fcm_error_count,
             "fcm_results": fcm_results,
             "expo_results": expo_results,
             "send_email": send_email,
