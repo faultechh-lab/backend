@@ -893,20 +893,9 @@ class TrialUsageTrackView(APIView):
 
         email_sent = False
         if recipients:
-            subject = f"Trial started: {request.user.username}"
-            message = "\n".join([
-                f"User ID: {request.user.id}",
-                f"Username: {request.user.username}",
-                f"Email: {request.user.email}",
-                f"Started At: {started_at_iso}",
-                f"Ends At: {ends_at_iso or '-'}",
-                f"Trial Days: {trial_days}",
-                f"Source: {source}",
-                f"Logged At: {timezone.now().isoformat()}",
-            ])
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', None)
+            from .utils import send_trial_alert_email
             try:
-                send_mail(subject, message, from_email, recipients, fail_silently=True)
+                send_trial_alert_email(request.user, details, recipients)
                 email_sent = True
             except Exception:
                 email_sent = False

@@ -460,3 +460,72 @@ def send_password_reset_email(user, lang=None):
     msg = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=to)
     msg.attach_alternative(html_body, "text/html")
     msg.send()
+
+
+def send_trial_alert_email(user, details, recipients):
+    """Send beautifully styled HTML alert email for Trial start."""
+    subject = f"Trial started: {user.username}"
+    greeting = f"Yeni deneme sürümü başlatıldı"
+    
+    # Text body
+    text_body = "\n".join([
+        subject,
+        "",
+        greeting,
+        f"Kullanıcı ID: {user.id}",
+        f"Kullanıcı Adı: {user.username}",
+        f"Email: {user.email}",
+        f"Başlangıç: {details.get('trial_started_at')}",
+        f"Bitiş: {details.get('trial_ends_at') or '-'}",
+        f"Süre (Gün): {details.get('trial_days')}",
+        f"Kaynak: {details.get('source')}"
+    ])
+
+    message_html = "<br/>".join([
+        f"<b>Kullanıcı ID:</b> {user.id}",
+        f"<b>Kullanıcı Adı:</b> {user.username}",
+        f"<b>Email:</b> {user.email}",
+        f"<b>Başlangıç:</b> {details.get('trial_started_at')}",
+        f"<b>Bitiş:</b> {details.get('trial_ends_at') or '-'}",
+        f"<b>Süre (Gün):</b> {details.get('trial_days')}",
+        f"<b>Kaynak:</b> {details.get('source')}"
+    ])
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{subject}</title>
+      <style>
+        body {{ margin:0; padding:0; background:#f1f4f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,Helvetica,sans-serif; color:#111827; }}
+        .wrap {{ width:100%; padding:24px 0; }}
+        .card {{ width:100%; max-width:720px; margin:0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05),0 12px 24px rgba(0,0,0,0.06); }}
+        .header {{ display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef2f7; }}
+        .title {{ font-weight:700; color:#0f172a; font-size:16px; }}
+        .band {{ background:#111827; color:#fff; text-align:center; font-weight:800; font-size:20px; padding:14px 16px; }}
+        .content {{ padding:22px; }}
+        .footer {{ text-align:center; color:#9ca3af; font-size:12px; padding:0 22px 18px 22px; }}
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="card">
+          <div class="header"><div class="title">{{getattr(settings, 'SITE_NAME', 'FaulTech')}}</div></div>
+          <div class="band">{subject}</div>
+          <div class="content">
+            <p style="font-weight:bold; font-size:16px;">{greeting}</p>
+            <p style="background:#f3f4f6; padding:16px; border-radius:8px; line-height:1.6; margin-top:10px;">{message_html}</p>
+          </div>
+          <div class="footer">{{getattr(settings, 'SITE_NAME', 'FaulTech')}} · {{getattr(settings, 'DEFAULT_FROM_EMAIL', '')}}</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or getattr(settings, "EMAIL_HOST_USER", None)
+    msg = EmailMultiAlternatives(subject=subject, body=text_body, from_email=from_email, to=recipients)
+    msg.attach_alternative(html_body, "text/html")
+    msg.send(fail_silently=True)

@@ -1130,8 +1130,12 @@ class NotificationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, id=None):
+        nid = id or request.query_params.get('id') or request.GET.get('id') or request.data.get('id')
+        if str(nid).lower() == 'all':
+            Notification.objects.all().delete()
+            return Response({"message": "Tüm bildirimler başarıyla silindi"}, status=status.HTTP_200_OK)
+            
         try:
-            nid = id or request.query_params.get('id') or request.GET.get('id') or request.data.get('id')
             item = Notification.objects.get(id=nid)
             item.delete()
             return Response({"message": "item Başarıyla Silindi"}, status=status.HTTP_200_OK)
