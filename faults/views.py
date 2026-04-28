@@ -90,7 +90,7 @@ def natural_sort_key(s):
 class CategoryListView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
     def get(self, request):
-        categories = Category.objects.filter(active=True).order_by('-id')
+        categories = Category.objects.filter(active=True).order_by('main_page_order', 'name')
         serializer = CategorySerializer(categories, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -365,12 +365,6 @@ class SearchFaultCodesAPIView(APIView):
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.select_related("parent").all()
     serializer_class = CategorySerializer
-    search_fields = ["name"]
-
-
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.select_related("parent").all()
-    serializer_class = CategorySerializer
     search_fields = ["name", "parent__name"]
 
     def get_queryset(self):
@@ -387,7 +381,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
             qs = qs.filter(parent_id=category)
 
 
-        return qs
+        return qs.order_by('main_page_order', 'name')
 
 
 class BrandViewSet(viewsets.ModelViewSet):

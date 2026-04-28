@@ -88,6 +88,7 @@ class Category(models.Model):
     active = models.BooleanField(default=True,verbose_name='Gösterilsin mi?')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
     type = models.CharField(max_length=20,blank=True,null=True,verbose_name='Kategori Tipi', choices=TypeChoices())
+    main_page_order = models.IntegerField(default=0,verbose_name='Ana Sayfa Sırası')
     class Meta:
         verbose_name = '02-Kategori'
         verbose_name_plural = '02-Kategoriler'
