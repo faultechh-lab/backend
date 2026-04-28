@@ -83,7 +83,8 @@ class ChildCategoryInline(admin.TabularInline):  # veya admin.StackedInline
     extra = 1
 
 class CategoryAdmin(ImportExportModelAdmin):
-    list_display = ("id","name", "parent", "active", "children_count_display", "has_children","type")
+    list_display = ("id","name", "parent", "active", "children_count_display", "has_children","type", "main_page_order")
+    list_editable = ("main_page_order",)
     list_filter = ("active",)
     search_fields = ("name",)
     autocomplete_fields = ("parent",)
