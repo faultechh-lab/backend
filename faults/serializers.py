@@ -66,7 +66,7 @@ class BrandSerializer(serializers.ModelSerializer):
         return obj.models.filter(active=True).count()
 
 
-class ModelSerializer_(serializers.ModelSerializer):
+class ModelSerializer(serializers.ModelSerializer):
     category_name=serializers.CharField(source='category.name')
     brand_name=serializers.CharField(source='brand.name')
     item_count = serializers.SerializerMethodField()
@@ -232,7 +232,7 @@ class FavoriteModelCreateSerialier(serializers.ModelSerializer):
         model = FavoriteModel
         fields = ["id","user","model"]
 class FavoriteModelSerializer(serializers.ModelSerializer):
-    model = ModelSerializer_()
+    model = ModelSerializer()
     class Meta:
         model = FavoriteModel
         fields = ["id","user","model"]

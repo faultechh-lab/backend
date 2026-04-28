@@ -28,7 +28,7 @@ from .models import (
 from .serializers import (
     CategorySerializer,
     BrandSerializer,
-    ModelSerializer_,
+    ModelSerializer,
     FaultCodesSerializer,
     SparePartImageSerializer,
     ParameterSerializer,
@@ -90,7 +90,7 @@ def natural_sort_key(s):
 class CategoryListView(APIView):
     permission_classes=[permissions.IsAuthenticatedOrReadOnly]
     def get(self, request):
-        categories = Category.objects.filter(active=True).order_by('-id')
+        categories = Category.objects.filter(active=True).order_by('main_page_order', 'name')
         serializer = CategorySerializer(categories, many=True,context={'request':request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -146,7 +146,7 @@ class ModelListView(APIView):
     def get(self, request):
         brand_id = request.query_params.get('brand_id')
         queryset = Model.objects.filter(active=True,brand_id=brand_id).order_by('name')
-        serializer = ModelSerializer_(queryset, many=True, context={'request': request})
+        serializer = ModelSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -381,7 +381,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
             qs = qs.filter(parent_id=category)
 
 
-        return qs
+        return qs.order_by('main_page_order', 'name')
 
 
 class BrandViewSet(viewsets.ModelViewSet):
@@ -407,7 +407,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 
 class ModelViewSet_(viewsets.ModelViewSet):
     queryset = Model.objects.select_related("category", "brand",).all()
-    serializer_class = ModelSerializer_
+    serializer_class = ModelSerializer
     search_fields = ["name", "name", "category__name", "brand__name"]
 
 
@@ -558,7 +558,7 @@ class QuickSearchView(APIView):
         data = {
             "categories": CategorySerializer(cat_qs, many=True, context={"request": request}).data,
             "brands": BrandSerializer(brand_qs, many=True, context={"request": request}).data,
-            "models": ModelSerializer_(model_qs, many=True, context={"request": request}).data,
+            "models": ModelSerializer(model_qs, many=True, context={"request": request}).data,
             "errors": ErrorSerializer(err_qs, many=True, context={"request": request}).data,
         }
         return Response(data)
