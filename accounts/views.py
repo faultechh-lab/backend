@@ -86,6 +86,8 @@ class RegisterView(APIView):
                     'last_name': user.last_name,
                     'device_id': user.device_id,
                     'phone_number': user.phone_number,
+                    'has_used_trial': user.has_used_trial,
+                    'trial_started_at': user.trial_started_at.isoformat() if user.trial_started_at else None,
                 },
                 'token': token.key,
             }, status=status.HTTP_201_CREATED)
@@ -158,7 +160,8 @@ class LoginView(APIView):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
-
+                        'has_used_trial': user.has_used_trial,
+                        'trial_started_at': user.trial_started_at.isoformat() if user.trial_started_at else None,
                     },
                     'token': token.key,
                 }, status=status.HTTP_200_OK)
@@ -172,7 +175,8 @@ class LoginView(APIView):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
-
+                        'has_used_trial': user.has_used_trial,
+                        'trial_started_at': user.trial_started_at.isoformat() if user.trial_started_at else None,
                     },
                     'token': token.key,
                 }, status=status.HTTP_200_OK)

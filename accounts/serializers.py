@@ -88,7 +88,7 @@ class CheckAuthSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'avatar','first_name', 'last_name','device_id',
             'is_verified','service_name','membership_status','membership_type','membership_status_display','membership_type_display','membership_created_at',
-            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company', 'last_login',
+            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company', 'last_login', 'has_used_trial', 'trial_started_at'
         )
 
     def get_is_premium(self, obj):
@@ -145,9 +145,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'is_verified',
             'membership_status_display',
             'membership_type_display',
+            'has_used_trial',
+            'trial_started_at',
         )
         read_only_fields = (
-            'id', 'membership_status', 'membership_created_at', 'membership_expires_at', 'is_verified', 
+            'id', 'membership_status', 'membership_created_at', 'membership_expires_at', 'is_verified', 'has_used_trial', 'trial_started_at'
         )
     def update(self, instance, validated_data):
         avatar = validated_data.get('avatar', None)
