@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import OnboardModel
-from accounts.models import User,Company,DefinedDevice,DeviceRenewal
+from accounts.models import User,Company,DefinedDevice,DeviceRenewal,MembershipHistory
 from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parameter,ParameterImage,BoilerCardRepairImage,
                             BoilerCardRepair,BoilerPartImage,BoilerPart,Video,RoomTermostat,
                             RoomTermostatImage,BoilerWorkingPrinciple,InstrumentUsage,SparePartsDefinitions,
@@ -90,6 +90,11 @@ class DeviceRenewalSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
     class Meta:
         model = DeviceRenewal
+        fields ='__all__'
+
+class MembershipHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MembershipHistory
         fields ='__all__'
 
 

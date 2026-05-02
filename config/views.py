@@ -12,9 +12,9 @@ from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,Def
                             BoilerCardRepairSerializer,BoilerPart,BoilerPartSerializer,VideoSerializer,RoomTermostatSerializer,
                             BoilerWorkingPrincipleSerializer,InstrumentUsageSerializer,SparePartsDefinitionsSerializer,BoilerRepairGuideSerializer,
                             BoilerBoardRepairerSerializer,FormSerializer,NewsSerializer,NotificationSerializer,ProductSerializer,
-                            OrderNotificationSerializer
+                            OrderNotificationSerializer,MembershipHistorySerializer
                             )
-from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken, FCMPushToken, MembershipChoices
+from accounts.models import User,Company,DefinedDevice,DeviceRenewal,ExpoPushToken, FCMPushToken, MembershipChoices, MembershipHistory
 from rest_framework.authtoken.models import Token
 from faults.models import (Category,Brand,Model,FaultCodes,SparePartImage,Parameter,ParameterImage,BoilerCardRepair,BoilerCardRepairImage,Video,RoomTermostat,
                             BoilerWorkingPrinciple,InstrumentUsage,SparePartsDefinitions,BoilerRepairGuide,BoilerBoardRepairer)
@@ -321,6 +321,15 @@ class DeviceRenewalView(APIView):
             return Response({"message": "Cihaz Yenileme Başarıyla Silindi"},status=status.HTTP_200_OK)
         except DeviceRenewal.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class MembershipHistoryView(APIView):
+    permission_classes=[IsAdminUser]
+    def get(self, request):
+        id = request.query_params.get('id') or request.GET.get('id') or request.data.get('id')
+        history = MembershipHistory.objects.filter(user_id=id).order_by('-start_date')
+        serializer = MembershipHistorySerializer(history, many=True, context={'request': request})
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
 
 
 class CategoryView(APIView):

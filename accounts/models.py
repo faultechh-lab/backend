@@ -74,6 +74,10 @@ class User(AbstractUser):
     membership_type = models.CharField(max_length=50, blank=True, null=True, verbose_name='Üyelik Türü', choices=PlanType.choices, default='INDIVIDUAL')
     membership_created_at = models.DateTimeField(blank=True, null=True)
     membership_expires_at = models.DateTimeField(blank=True, null=True)
+    first_membership_date = models.DateTimeField(blank=True, null=True, verbose_name='İlk Üyelik Tarihi')
+    renewal_count = models.PositiveIntegerField(default=0, verbose_name='Yenileme Sayısı')
+    has_used_trial = models.BooleanField(default=False, verbose_name='3 Günlük Deneme Kullandı')
+    trial_started_at = models.DateTimeField(null=True, blank=True, verbose_name='Deneme Başlangıç Tarihi')
     password_reset_code = models.CharField(max_length=4, null=True, blank=True)
     password_reset_code_sent_at = models.DateTimeField(null=True, blank=True)
     verification_code = models.CharField(max_length=4, null=True, blank=True)
@@ -161,14 +165,39 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
+        membership_changed = False
 
         if not is_new:
-            old_instance = type(self).objects.get(pk=self.pk)
-            if self.avatar and old_instance.avatar != self.avatar:
-                # process avatar similar to previous Profile.save behavior
-                self.avatar = process_image(self.avatar, self.username)
-        
+            try:
+                old_instance = type(self).objects.get(pk=self.pk)
+                if self.avatar and old_instance.avatar != self.avatar:
+                    self.avatar = process_image(self.avatar, self.username)
+                
+                if self.membership_status == 'PREMIUM' and self.membership_created_at:
+                    if old_instance.membership_created_at != self.membership_created_at:
+                        membership_changed = True
+            except type(self).DoesNotExist:
+                pass
+        else:
+            if self.membership_status == 'PREMIUM' and self.membership_created_at:
+                membership_changed = True
+
+        if membership_changed:
+            if not self.first_membership_date:
+                self.first_membership_date = self.membership_created_at
+                self.renewal_count = 1
+            else:
+                self.renewal_count += 1
+
         super().save(*args, **kwargs)
+
+        if membership_changed:
+            MembershipHistory.objects.create(
+                user=self,
+                start_date=self.membership_created_at,
+                end_date=self.membership_expires_at,
+                renewal_number=self.renewal_count
+            )
 
 
 class Company(models.Model):
@@ -183,11 +212,68 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True,blank=True,null=True)
     membership_created_at = models.DateTimeField(blank=True, null=True)
     membership_expires_at = models.DateTimeField(blank=True, null=True)
+    first_membership_date = models.DateTimeField(blank=True, null=True, verbose_name='İlk Üyelik Tarihi')
+    renewal_count = models.PositiveIntegerField(default=0, verbose_name='Yenileme Sayısı')
+    
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        membership_changed = False
+
+        if not is_new:
+            try:
+                old_instance = type(self).objects.get(pk=self.pk)
+                if self.membership_created_at and old_instance.membership_created_at != self.membership_created_at:
+                    membership_changed = True
+            except type(self).DoesNotExist:
+                pass
+        else:
+            if self.membership_created_at:
+                membership_changed = True
+
+        if membership_changed:
+            if not self.first_membership_date:
+                self.first_membership_date = self.membership_created_at
+                self.renewal_count = 1
+            else:
+                self.renewal_count += 1
+
+        super().save(*args, **kwargs)
+
+        if membership_changed:
+            MembershipHistory.objects.create(
+                company=self,
+                start_date=self.membership_created_at,
+                end_date=self.membership_expires_at,
+                renewal_number=self.renewal_count
+            )
+
     def __str__(self):
         return f'{self.service_name} - {self.user.username}'
     
     class Meta:
         verbose_name_plural = 'Şirketler'
+
+
+class MembershipHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='membership_history', null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='membership_history', null=True, blank=True)
+    start_date = models.DateTimeField(verbose_name='Dönem Başlangıcı', null=True, blank=True)
+    end_date = models.DateTimeField(verbose_name='Dönem Bitişi', null=True, blank=True)
+    renewal_number = models.PositiveIntegerField(verbose_name='Kaçıncı Yenileme')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Üyelik Geçmişi'
+        verbose_name_plural = 'Üyelik Geçmişleri'
+        ordering = ['-start_date']
+
+    def __str__(self):
+        if self.company:
+            return f"{self.company.service_name} - {self.renewal_number}. Yenileme"
+        elif self.user:
+            return f"{self.user.username} - {self.renewal_number}. Yenileme"
+        return f"Geçmiş - {self.renewal_number}"
 
         
 class DefinedDevice(models.Model):

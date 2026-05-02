@@ -612,7 +612,7 @@ class UserListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name','device_id', 'last_login', 'date_joined', 'membership_status', 'membership_type', 'membership_expires_at', 'is_active')
+        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name','device_id', 'last_login', 'date_joined', 'membership_status', 'membership_type', 'membership_expires_at', 'is_active', 'has_used_trial', 'trial_started_at')
         return Response(list(users))
 
 class DefinedDeviceCreateView(APIView):
@@ -865,6 +865,12 @@ class TrialUsageTrackView(APIView):
 
         started_at_iso = datetime.fromtimestamp(started_at_ms / 1000, tz=dt_timezone.utc).isoformat()
         ends_at_iso = datetime.fromtimestamp(ends_at_ms / 1000, tz=dt_timezone.utc).isoformat() if ends_at_ms else None
+        
+        user = request.user
+        if not user.has_used_trial:
+            user.has_used_trial = True
+            user.trial_started_at = datetime.fromtimestamp(started_at_ms / 1000, tz=dt_timezone.utc)
+            user.save(update_fields=['has_used_trial', 'trial_started_at'])
 
         details = {
             'event': 'PREMIUM_TRIAL_STARTED',

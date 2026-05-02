@@ -5,7 +5,7 @@ from .views import (
     CategoryView,BrandView,ModelView,FaultCodesView,ParameterView,BoilerPartView,BoilerCardRepairView,
     BoilerWorkingPrincipleView,VideoView,RoomTermostatView,InstrumentUsageView,SparePartsDefinitionsView,
     BoilerRepairGuideView,BoilerBoardRepairerView,FormView,NewsView,NotificationView,ProductView,OrderNotificationView,
-    ExpoPushSendView, FCMSendView
+    ExpoPushSendView, FCMSendView, MembershipHistoryView
 )
 
 
@@ -19,6 +19,7 @@ urlpatterns=[
     path('defined-device-list/<uuid:pk>/', DefinedDeviceView.as_view(), name='defined-device-detail'),
     path('device-renewal-list/', DeviceRenewalView.as_view(), name='device-renewal-list'),
     path('device-renewal-list/<int:pk>/', DeviceRenewalView.as_view(), name='device-renewal-detail'),
+    path('membership-history/', MembershipHistoryView.as_view(), name='membership-history'),
     path('admin-login/', AdminLoginView.as_view(), name='admin-login'),
     
     path('categories/', CategoryView.as_view(), name='category-list'),
