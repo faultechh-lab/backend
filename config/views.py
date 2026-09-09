@@ -6,6 +6,7 @@ import json
 from urllib import request as urlrequest, error as urlerror
 from django.conf import settings
 from django.core.mail import send_mail
+from django.contrib.auth import authenticate
 
 from .serializers import (OnboardSerializer,UserSerializer,CompanySerializer,DefinedDeviceSerializer,DeviceRenewalSerializer,CategorySerializer,
                             BrandSerializer,ModelSerializer,FaultCodesSerializer,ParameterSerializer,
@@ -156,14 +157,19 @@ class ConfigView(APIView):
 class AdminLoginView(APIView):
     permission_classes=[AllowAny]
     def post(self, request):
-        try:
-            user = User.objects.get(username=request.data['username'])
-            if not user.is_superuser:
-                return Response({"detail": "Buna Yetkiniz Yok"}, status=status.HTTP_401_UNAUTHORIZED)
-            token, _ = Token.objects.get_or_create(user=user)
-            return Response({"token": token.key}, status=status.HTTP_200_OK)
-        except User.DoesNotExist:
-                return Response({"detail": "Kullanıcı Bulunamadı"}, status=status.HTTP_404_NOT_FOUND)
+        username = str(request.data.get('username') or '').strip()
+        password = request.data.get('password')
+        if not username or not password:
+            return Response({"detail": "Kullanıcı adı ve şifre zorunludur"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # authenticate() verifies the password hash and rejects inactive accounts.
+        # A generic response prevents exposing whether an admin username exists.
+        user = authenticate(request, username=username, password=password)
+        if not user or not user.is_superuser:
+            return Response({"detail": "Geçersiz kullanıcı adı veya şifre"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({"token": token.key}, status=status.HTTP_200_OK)
 
 
 class UserListView(APIView):

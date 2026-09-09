@@ -24,7 +24,7 @@ class Command(BaseCommand):
                         user=user,
                         start_date=user.membership_created_at,
                         end_date=user.membership_expires_at,
-                        renewal_index=1
+                        renewal_number=1
                     )
                     user_count += 1
 
@@ -42,7 +42,7 @@ class Command(BaseCommand):
                         company=company,
                         start_date=company.membership_created_at,
                         end_date=company.membership_expires_at,
-                        renewal_index=1
+                        renewal_number=1
                     )
                     company_count += 1
 
