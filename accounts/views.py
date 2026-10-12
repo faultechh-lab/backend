@@ -42,6 +42,7 @@ from rest_framework.throttling import AnonRateThrottle
 from django.db import transaction
 from django.utils import timezone
 from .models import AuditLog,PlanType,MembershipChoices
+from .trial_access import ensure_trial, TRIAL_DURATION
 
 
 # Create your views here.
@@ -264,6 +265,7 @@ class CheckAuthView(APIView):
         # Update last login on check auth
         update_last_login(None, user)
 
+        ensure_trial(user)
         serializer = CheckAuthSerializer(request.user, many=False, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -838,25 +840,13 @@ class TrialUsageTrackView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        started_at_ms_raw = request.data.get('trial_started_at_ms')
-        ends_at_ms_raw = request.data.get('trial_ends_at_ms')
-        trial_days_raw = request.data.get('trial_days')
         source = request.data.get('source') or 'mobile_trial_start'
-
-        try:
-            started_at_ms = int(started_at_ms_raw)
-        except (TypeError, ValueError):
-            return Response({'detail': _('Invalid trial start timestamp')}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            ends_at_ms = int(ends_at_ms_raw) if ends_at_ms_raw is not None else None
-        except (TypeError, ValueError):
-            ends_at_ms = None
-
-        try:
-            trial_days = int(trial_days_raw) if trial_days_raw is not None else 0
-        except (TypeError, ValueError):
-            trial_days = 0
+        user = ensure_trial(request.user)
+        if not user.trial_started_at or user.membership_status == MembershipChoices.PREMIUM:
+            return Response({'detail': _('Trial unavailable')}, status=status.HTTP_200_OK)
+        started_at_ms = int(user.trial_started_at.timestamp() * 1000)
+        ends_at_ms = int((user.trial_started_at + TRIAL_DURATION).timestamp() * 1000)
+        trial_days = 3
 
         existing_logs = AuditLog.objects.filter(
             user=request.user,
@@ -870,12 +860,6 @@ class TrialUsageTrackView(APIView):
         started_at_iso = datetime.fromtimestamp(started_at_ms / 1000, tz=dt_timezone.utc).isoformat()
         ends_at_iso = datetime.fromtimestamp(ends_at_ms / 1000, tz=dt_timezone.utc).isoformat() if ends_at_ms else None
         
-        user = request.user
-        if not user.has_used_trial:
-            user.has_used_trial = True
-            user.trial_started_at = datetime.fromtimestamp(started_at_ms / 1000, tz=dt_timezone.utc)
-            user.save(update_fields=['has_used_trial', 'trial_started_at'])
-
         details = {
             'event': 'PREMIUM_TRIAL_STARTED',
             'trial_started_at_ms': started_at_ms,

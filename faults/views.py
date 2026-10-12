@@ -1,4 +1,5 @@
 from rest_framework import viewsets, filters, permissions
+from accounts.permissions import HasPremiumContentAccess
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q, Value
@@ -151,7 +152,7 @@ class ModelListView(APIView):
 
 
 class FaultCodesListView(APIView):
-    permission_classes =[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -171,7 +172,7 @@ class FaultCodesListView(APIView):
 
 
 class ParameterListView(APIView):
-    permission_classes =[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         id = request.query_params.get('model_id')
         queryset = Parameter.objects.filter(active=True,model_id=id)
@@ -203,7 +204,7 @@ class BoilerWorkingPrincipleView(APIView):
 
 #kombi kart tamirleri
 class BoilerCardRepairView(APIView):
-    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         id = request.query_params.get('model_id')
         queryset = BoilerCardRepair.objects.filter(active=True,model_id=id)
@@ -212,7 +213,7 @@ class BoilerCardRepairView(APIView):
 
 #kombide kullanılan parçalar
 class BoilerPartView(APIView):
-    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -246,7 +247,7 @@ class InstrumentUsageView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class VideoListView(APIView):
-    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         id= request.query_params.get('model_id')
         queryset = Video.objects.filter(active=True,model_id=id)
@@ -254,7 +255,7 @@ class VideoListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class RoomTermostatView(APIView):
-    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         id = request.query_params.get('model_id')
         queryset = RoomTermostat.objects.filter(active=True,model_id=id)
@@ -262,7 +263,7 @@ class RoomTermostatView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class FavoriteBrandView(APIView):
-    permission_classes=[permissions.IsAuthenticated]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         queryset = FavoriteBrand.objects.filter(user=request.user)
         serializer = FavoriteBrandSerializer(queryset, many=True,context={'request':request})
@@ -281,7 +282,7 @@ class FavoriteBrandView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class FavoriteModelView(APIView):
-    permission_classes=[permissions.IsAuthenticated]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         queryset = FavoriteModel.objects.filter(user=request.user)
         serializer = FavoriteModelSerializer(queryset, many=True,context={'request':request})
@@ -300,7 +301,7 @@ class FavoriteModelView(APIView):
 
 
 class FavoriteFaultCodeView(APIView):
-    permission_classes=[permissions.IsAuthenticated]
+    permission_classes = [HasPremiumContentAccess]
     def get(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
@@ -324,7 +325,7 @@ class FavoriteFaultCodeView(APIView):
 
 
 class SearchFaultCodesAPIView(APIView):
-    permission_classes=[permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [HasPremiumContentAccess]
 
     def get(self, request):
         lang = request.GET.get("lang")
@@ -508,7 +509,7 @@ class FavoriteBrandViewSet(viewsets.ModelViewSet):
 
 
 class QuickSearchView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasPremiumContentAccess]
 
     def get(self, request, *args, **kwargs):
         q = request.query_params.get("search") or request.query_params.get("q") or ""

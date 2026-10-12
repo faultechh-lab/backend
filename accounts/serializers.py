@@ -78,6 +78,17 @@ class LoginSerializer(serializers.ModelSerializer):
         return attrs
 
 class CheckAuthSerializer(serializers.ModelSerializer):
+    trial_ends_at = serializers.SerializerMethodField()
+    server_now = serializers.SerializerMethodField()
+
+    def get_trial_ends_at(self, obj):
+        if obj.trial_started_at and obj.has_used_trial and obj.membership_status != MembershipChoices.PREMIUM:
+            return obj.trial_started_at + timedelta(days=3)
+        return None
+
+    def get_server_now(self, obj):
+        return timezone.now()
+
     membership_status_display = serializers.CharField(source='get_membership_status_display', read_only=True)
     membership_type_display = serializers.CharField(source='get_membership_type_display', read_only=True)
     is_expired = serializers.SerializerMethodField()  # 🔹 read_only=True yerine bu daha doğru
@@ -88,7 +99,7 @@ class CheckAuthSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'avatar','first_name', 'last_name','device_id',
             'is_verified','service_name','membership_status','membership_type','membership_status_display','membership_type_display','membership_created_at',
-            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company', 'last_login', 'has_used_trial', 'trial_started_at'
+            'membership_expires_at','is_staff', 'is_superuser','is_expired','is_premium','is_company', 'last_login', 'has_used_trial', 'trial_started_at', 'trial_ends_at', 'server_now'
         )
 
     def get_is_premium(self, obj):

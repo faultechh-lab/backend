@@ -164,6 +164,10 @@ class User(AbstractUser):
         return timezone.now() > expiration_time
 
     def save(self, *args, **kwargs):
+        if self.membership_status == MembershipChoices.PREMIUM:
+            self.has_used_trial = True
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'has_used_trial'}
         is_new = self._state.adding
         membership_changed = False
 
@@ -397,5 +401,3 @@ class AuditLog(models.Model):
     def __str__(self):
         username = self.user.username if self.user else 'Anonymous'
         return f"{username} - {self.get_action_display()} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
-    
-    
