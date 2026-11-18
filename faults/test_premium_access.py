@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from accounts.models import Company, DefinedDevice, User
+from accounts.models import AuditLog, Company, DefinedDevice, User
 from .models import Brand, Category, FaultCodes, FavoriteFaultCode, Model
 
 
@@ -49,6 +49,34 @@ class PremiumContentTests(TestCase):
     def test_anonymous_denied(self):
         self.client.credentials()
         self.assert_endpoints(401)
+
+    def test_fault_codes_audit_tracks_only_free_accounts_and_records_returned_count(self):
+        logs = AuditLog.objects.filter(action=AuditLog.ActionChoices.FAULT_CODES_ACCESS)
+        url = '/api/faults/fault-codes-list/'
+        params = {'model_id': self.model.pk, 'lang': 'tr'}
+        start = timezone.now()
+
+        User.objects.filter(pk=self.user.pk).update(
+            has_used_trial=True, trial_started_at=start - timedelta(days=4),
+        )
+        self.assertEqual(self.client.get(url, params).status_code, 403)
+        self.assertEqual(logs.get().details, {
+            'http_status': 403, 'record_count': 0, 'trial_status': 'expired',
+            'model_id': str(self.model.pk),
+        })
+
+        User.objects.filter(pk=self.user.pk).update(trial_started_at=start)
+        self.assertEqual(self.client.get(url, params).status_code, 200)
+        self.assertEqual(logs.first().details, {
+            'http_status': 200, 'record_count': 1, 'trial_status': 'active',
+            'model_id': str(self.model.pk),
+        })
+
+        User.objects.filter(pk=self.user.pk).update(
+            membership_status='PREMIUM', membership_expires_at=start + timedelta(days=1),
+        )
+        self.assertEqual(self.client.get(url, params).status_code, 200)
+        self.assertEqual(logs.count(), 2)
 
     def test_unused_free_account_denied_without_starting_trial(self):
         self.assert_endpoints(403)
