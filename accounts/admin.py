@@ -60,12 +60,17 @@ class DefinedDeviceAdmin(ImportExportModelAdmin):
     readonly_fields = ('id','created_at', )
 
 class AuditLogAdmin(ImportExportModelAdmin):
-    list_display = ('user', 'action', 'ip_address', 'created_at', 'short_details')
+    list_display = ('user', 'user_email', 'action', 'ip_address', 'created_at', 'short_details')
+    list_select_related = ('user',)
     list_filter = ('action', 'created_at')
     search_fields = ('user__username', 'user__email', 'ip_address', 'action')
     readonly_fields = ('user', 'action', 'ip_address', 'user_agent', 'details', 'created_at')
     date_hierarchy = 'created_at'
     
+    @admin.display(description=_('Email'), ordering='user__email')
+    def user_email(self, obj):
+        return obj.user.email if obj.user else None
+
     def short_details(self, obj):
         if obj.details:
             details_str = str(obj.details)[:50]

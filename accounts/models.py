@@ -381,6 +381,7 @@ class AuditLog(models.Model):
         EMAIL_VERIFY = 'EMAIL_VERIFY', _('Email Verify')
         PROFILE_UPDATE = 'PROFILE_UPDATE', _('Profile Update')
         FAILED_LOGIN = 'FAILED_LOGIN', _('Failed Login')
+        FAULT_CODES_ACCESS = 'FAULT_CODES_ACCESS', _('Fault Codes Access')
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='audit_logs', null=True, blank=True)
     action = models.CharField(max_length=50, choices=ActionChoices.choices)
