@@ -207,48 +207,44 @@ class LogoutView(APIView):
 class AccountDeleteView(APIView):
     permission_classes=[permissions.AllowAny]
 
+    def get_permissions(self):
+        if self.request.method == "DELETE":
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
 
-    @transaction.atomic
+    def delete(self, request):
+        lang = request.query_params.get("lang") or request.LANGUAGE_CODE
+        with translation.override(lang):
+            return self._delete_account(request.user)
+
+
     def post(self, request):
-        lang = request.GET.get("lang")
-        translation.activate(lang)
-        request.LANGUAGE_CODE = lang        
+        lang = request.query_params.get("lang") or request.LANGUAGE_CODE
         email = request.data.get("email")
-        if not email:
-            return Response({"detail": _("Email is required")}, status=status.HTTP_400_BAD_REQUEST)
+        password = request.data.get("password")
+        with translation.override(lang):
+            if not isinstance(email, str) or not email:
+                return Response({"detail": _("Email is required")}, status=status.HTTP_400_BAD_REQUEST)
+            if not isinstance(password, str) or not password:
+                return Response({"detail": _("Password is required")}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                user = User.objects.get(email__iexact=email)
+            except (User.DoesNotExist, User.MultipleObjectsReturned):
+                return Response({"detail": _("Invalid credentials")}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not user.check_password(password):
+                return Response({"detail": _("Invalid credentials")}, status=status.HTTP_400_BAD_REQUEST)
+            return self._delete_account(user)
+
+    def _delete_account(self, user):
         try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
-            return Response({"detail": _("User not found. Please check your information.")}, status=status.HTTP_404_NOT_FOUND)
-        pwd = request.data.get("password")
-        if pwd and not user.check_password(pwd):
-            return Response({"detail": _("Invalid password")}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            try:
-                Token.objects.filter(user=user).delete()
-            except Exception:
-                pass
-            try:
-                ExpoPushToken.objects.filter(user=user).delete()
-            except Exception:
-                pass
-            try:
-                FCMPushToken.objects.filter(user=user).delete()
-            except Exception:
-                pass
-
-            create_audit_log(
-                user=user,
-                action=AuditLog.ActionChoices.PROFILE_UPDATE,
-                request=request,
-            )
-
+            # Related tokens, notifications and account records are deleted by CASCADE.
             user.delete()
-            return Response({"detail": _("Account deleted successfully")}, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"Account delete error: {str(e)}")
+        except Exception:
+            logger.exception("Account deletion failed")
             return Response({"detail": _("Account deletion failed")}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"detail": _("Account deleted successfully")}, status=status.HTTP_200_OK)
 
 class CheckAuthView(APIView):
     permission_classes = [permissions.IsAuthenticated]
