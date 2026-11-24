@@ -3,7 +3,7 @@ from accounts.models import AuditLog, MembershipChoices
 from accounts.permissions import HasPremiumContentAccess
 from accounts.trial_access import TRIAL_DURATION
 from accounts.utils import create_audit_log
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 import logging
 from rest_framework.views import APIView
@@ -165,38 +165,56 @@ class FaultCodesListView(APIView):
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
-        if request.method != 'GET' or response.status_code not in (200, 403):
-            return response
+        if response.status_code in (200, 401, 403, 500):
+            count = len(response.data) if response.status_code == 200 and isinstance(response.data, list) else 0
+            self._audit_access(request, response.status_code, count)
+        return response
+
+    def handle_exception(self, exc):
+        try:
+            return super().handle_exception(exc)
+        except Exception:
+            self._audit_access(self.request, 500)
+            raise
+
+    def _audit_access(self, request, http_status, record_count=0):
+        if request.method != 'GET':
+            return
 
         user = request.user
-        if not user.is_authenticated or user.is_staff or user.membership_status != MembershipChoices.FREE:
-            return response
-
-        started_at = user.trial_started_at
-        now = timezone.now()
-        if not user.has_used_trial or not started_at:
-            trial_status = 'none'
-        elif now < started_at:
-            trial_status = 'not_started'
-        elif now < started_at + TRIAL_DURATION:
-            trial_status = 'active'
+        if not user.is_authenticated:
+            if http_status != 401:
+                return
+            user = None
+            trial_status = 'unknown'
         else:
-            trial_status = 'expired'
+            if user.is_staff or user.membership_status != MembershipChoices.FREE:
+                return
+            started_at = user.trial_started_at
+            now = timezone.now()
+            if not user.has_used_trial or not started_at:
+                trial_status = 'none'
+            elif now < started_at:
+                trial_status = 'not_started'
+            elif now < started_at + TRIAL_DURATION:
+                trial_status = 'active'
+            else:
+                trial_status = 'expired'
 
         try:
-            create_audit_log(
-                user,
-                AuditLog.ActionChoices.FAULT_CODES_ACCESS,
-                details={
-                    'http_status': response.status_code,
-                    'record_count': len(response.data) if isinstance(response.data, list) else 0,
-                    'trial_status': trial_status,
-                    'model_id': request.query_params.get('model_id', '')[:80],
-                },
-            )
+            with transaction.atomic():
+                create_audit_log(
+                    user,
+                    AuditLog.ActionChoices.FAULT_CODES_ACCESS,
+                    details={
+                        'http_status': http_status,
+                        'record_count': record_count,
+                        'trial_status': trial_status,
+                        'model_id': request.query_params.get('model_id', '')[:80],
+                    },
+                )
         except DatabaseError:
             logger.exception('Could not record fault codes access')
-        return response
 
     def get(self, request):
         lang = request.GET.get("lang")

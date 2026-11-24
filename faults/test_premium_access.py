@@ -50,6 +50,32 @@ class PremiumContentTests(TestCase):
         self.client.credentials()
         self.assert_endpoints(401)
 
+    def test_unauthorized_fault_codes_request_is_logged_without_user(self):
+        self.client.credentials(HTTP_AUTHORIZATION='Token invalid')
+        response = self.client.get('/api/faults/fault-codes-list/', {'model_id': self.model.pk})
+        self.assertEqual(response.status_code, 401)
+        log = AuditLog.objects.get(action=AuditLog.ActionChoices.FAULT_CODES_ACCESS)
+        self.assertIsNone(log.user_id)
+        self.assertEqual(log.details, {
+            'http_status': 401, 'record_count': 0, 'trial_status': 'unknown',
+            'model_id': str(self.model.pk),
+        })
+
+    def test_unhandled_fault_codes_error_is_logged_for_free_user(self):
+        User.objects.filter(pk=self.user.pk).update(has_used_trial=True, trial_started_at=timezone.now())
+        self.client.raise_request_exception = False
+
+        with patch('faults.views.FaultCodesListView.get', side_effect=RuntimeError('test error')):
+            response = self.client.get('/api/faults/fault-codes-list/', {'model_id': self.model.pk})
+
+        self.assertEqual(response.status_code, 500)
+        log = AuditLog.objects.get(action=AuditLog.ActionChoices.FAULT_CODES_ACCESS)
+        self.assertEqual(log.user, self.user)
+        self.assertEqual(log.details, {
+            'http_status': 500, 'record_count': 0, 'trial_status': 'active',
+            'model_id': str(self.model.pk),
+        })
+
     def test_fault_codes_audit_tracks_only_free_accounts_and_records_returned_count(self):
         logs = AuditLog.objects.filter(action=AuditLog.ActionChoices.FAULT_CODES_ACCESS)
         url = '/api/faults/fault-codes-list/'
