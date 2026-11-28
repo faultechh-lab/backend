@@ -70,6 +70,7 @@ class LoginSerializer(serializers.ModelSerializer):
         password = attrs.get('password')
         user = User.objects.filter(Q(username__iexact=username_or_email) | Q(email__iexact=username_or_email)).first()
 
+        self.attempted_user = user
         if not user or not user.check_password(password):
             raise serializers.ValidationError(_("User not found. Please check your information."))
 

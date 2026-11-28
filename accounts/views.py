@@ -39,7 +39,7 @@ from django.http import HttpResponse
 import logging
 logger = logging.getLogger(__name__)
 from rest_framework.throttling import AnonRateThrottle
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 from .models import AuditLog,PlanType,MembershipChoices
 from .trial_access import ensure_trial, TRIAL_DURATION
@@ -142,12 +142,50 @@ class VerifyEmailResendView(APIView):
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        if request.method == "POST" and response.status_code >= 400:
+            self._audit_failed_login(response.status_code)
+        return response
+
+    def handle_exception(self, exc):
+        try:
+            return super().handle_exception(exc)
+        except Exception:
+            if self.request.method == "POST":
+                self._audit_failed_login(500)
+            raise
+
+    def _audit_failed_login(self, http_status):
+        reason = getattr(self, "login_failure_reason", None)
+        if http_status >= 500:
+            reason = "server_error"
+        elif http_status == 429:
+            reason = "rate_limited"
+        elif http_status == 401:
+            reason = "authentication_failed"
+
+        # Record only server-generated metadata. Request fields can contain secrets.
+        try:
+            with transaction.atomic():
+                create_audit_log(
+                    getattr(getattr(self, "login_serializer", None), "attempted_user", None),
+                    AuditLog.ActionChoices.FAILED_LOGIN,
+                    details={
+                        "source": "mobile_login",
+                        "http_status": http_status,
+                        "reason": reason or "request_rejected",
+                    },
+                )
+        except DatabaseError:
+            logger.exception("Could not record failed mobile login")
+
     def post(self, request):
         lang = request.GET.get("lang")
         translation.activate(lang)
         request.LANGUAGE_CODE = lang
 
-        serializer = LoginSerializer(data=request.data)
+        serializer = self.login_serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data["user"]
             update_last_login(None, user)
@@ -182,8 +220,12 @@ class LoginView(APIView):
                     'token': token.key,
                 }, status=status.HTTP_200_OK)
             else:
+                self.login_failure_reason = "unregistered_device"
                 return Response({"detail":_("Login from registered device only")}, status=status.HTTP_400_BAD_REQUEST)
 
+        self.login_failure_reason = (
+            "invalid_credentials" if "non_field_errors" in serializer.errors else "invalid_request"
+        )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
