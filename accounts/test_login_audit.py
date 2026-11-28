@@ -57,7 +57,18 @@ class LoginAuditTests(TestCase):
             response = self.client.post(self.url, self.credentials)
         self.assert_failed_login(response, 500, "server_error", self.user)
 
-    def test_success_does_not_create_failed_login_log(self):
-        response = self.client.post(self.url, self.credentials)
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(AuditLog.objects.filter(action=AuditLog.ActionChoices.FAILED_LOGIN).exists())
+    def test_success_records_only_login_for_regular_user_and_superuser(self):
+        for is_superuser in (False, True):
+            with self.subTest(is_superuser=is_superuser):
+                self.user.is_superuser = is_superuser
+                self.user.save(update_fields=["is_superuser"])
+                device_id = "other-device" if is_superuser else self.credentials["device_id"]
+                response = self.client.post(self.url, {**self.credentials, "device_id": device_id})
+
+                self.assertEqual(response.status_code, 200)
+                log = AuditLog.objects.latest("pk")
+                self.assertEqual(log.action, AuditLog.ActionChoices.LOGIN)
+                self.assertEqual(log.user, self.user)
+                self.assertEqual(log.details, {"source": "mobile_login", "http_status": 200})
+
+        self.assertEqual(AuditLog.objects.count(), 2)

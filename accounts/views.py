@@ -144,8 +144,11 @@ class LoginView(APIView):
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
-        if request.method == "POST" and response.status_code >= 400:
-            self._audit_failed_login(response.status_code)
+        if request.method == "POST":
+            if response.status_code == status.HTTP_200_OK:
+                self._audit_login(AuditLog.ActionChoices.LOGIN, response.status_code)
+            elif response.status_code >= 400:
+                self._audit_failed_login(response.status_code)
         return response
 
     def handle_exception(self, exc):
@@ -165,20 +168,22 @@ class LoginView(APIView):
         elif http_status == 401:
             reason = "authentication_failed"
 
+        self._audit_login(AuditLog.ActionChoices.FAILED_LOGIN, http_status, reason or "request_rejected")
+
+    def _audit_login(self, action, http_status, reason=None):
         # Record only server-generated metadata. Request fields can contain secrets.
+        details = {"source": "mobile_login", "http_status": http_status}
+        if reason is not None:
+            details["reason"] = reason
         try:
             with transaction.atomic():
                 create_audit_log(
                     getattr(getattr(self, "login_serializer", None), "attempted_user", None),
-                    AuditLog.ActionChoices.FAILED_LOGIN,
-                    details={
-                        "source": "mobile_login",
-                        "http_status": http_status,
-                        "reason": reason or "request_rejected",
-                    },
+                    action,
+                    details=details,
                 )
         except DatabaseError:
-            logger.exception("Could not record failed mobile login")
+            logger.exception("Could not record mobile login audit entry")
 
     def post(self, request):
         lang = request.GET.get("lang")
