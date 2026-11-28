@@ -243,7 +243,9 @@ class LogoutView(APIView):
             request=request
         )
 
-        request.user.auth_token.delete()
+        # Superusers share their token across devices. Logout clears only the client session.
+        if not request.user.is_superuser:
+            request.user.auth_token.delete()
         return Response({"detail":_("Logged out successfully")}, status=status.HTTP_200_OK)
 
 class AccountDeleteView(APIView):
